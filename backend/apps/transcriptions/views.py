@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -46,3 +47,31 @@ def transcription_collection(request):
 
     serializer = TranscriptionSerializer(transcription)
     return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+@api_view(["PATCH", "DELETE"])
+def transcription_detail(request, transcription_id: int):
+    transcription = get_object_or_404(Transcription, id=transcription_id, user=request.user)
+
+    if request.method == "DELETE":
+        transcription.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    transcript = request.data.get("transcript")
+    if not isinstance(transcript, str):
+        return Response(
+            {"detail": "'transcript' must be a string"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    transcript = transcript.strip()
+    if not transcript:
+        return Response(
+            {"detail": "'transcript' cannot be empty"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    transcription.transcript = transcript
+    transcription.save(update_fields=["transcript"])
+    serializer = TranscriptionSerializer(transcription)
+    return Response(serializer.data, status=status.HTTP_200_OK)

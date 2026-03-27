@@ -46,6 +46,10 @@ export default function App() {
   const [transcriptionError, setTranscriptionError] = useState<string | null>(null);
   const [recorderState, setRecorderState] = useState<RecorderState>("idle");
 
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingText, setEditingText] = useState("");
+  const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
@@ -117,6 +121,90 @@ export default function App() {
 
     const created = (await response.json()) as Transcription;
     setTranscriptions((prev) => [created, ...prev]);
+  }
+
+  async function updateTranscript(id: number, transcript: string) {
+    const csrfToken = getCookie("csrftoken");
+    const response = await fetch(`${API_BASE_URL}/api/transcriptions/${id}/`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        ...(csrfToken ? { "X-CSRFToken": csrfToken } : {}),
+      },
+      body: JSON.stringify({ transcript }),
+    });
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => ({}))) as { detail?: string };
+      throw new Error(payload.detail || `Update failed (${response.status})`);
+    }
+
+    const updated = (await response.json()) as Transcription;
+    setTranscriptions((prev) => prev.map((item) => (item.id === id ? updated : item)));
+  }
+
+  async function deleteTranscript(id: number) {
+    const csrfToken = getCookie("csrftoken");
+    const response = await fetch(`${API_BASE_URL}/api/transcriptions/${id}/`, {
+      method: "DELETE",
+      credentials: "include",
+      headers: csrfToken ? { "X-CSRFToken": csrfToken } : {},
+    });
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => ({}))) as { detail?: string };
+      throw new Error(payload.detail || `Delete failed (${response.status})`);
+    }
+
+    setTranscriptions((prev) => prev.filter((item) => item.id !== id));
+  }
+
+  function startEditing(entry: Transcription) {
+    setEditingId(entry.id);
+    setEditingText(entry.transcript);
+    setTranscriptionError(null);
+  }
+
+  function cancelEditing() {
+    setEditingId(null);
+    setEditingText("");
+  }
+
+  async function saveEditing(id: number) {
+    const nextText = editingText.trim();
+    if (!nextText) {
+      setTranscriptionError("Transcript cannot be empty.");
+      return;
+    }
+
+    try {
+      setActionLoadingId(id);
+      setTranscriptionError(null);
+      await updateTranscript(id, nextText);
+      cancelEditing();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unexpected error";
+      setTranscriptionError(message);
+    } finally {
+      setActionLoadingId(null);
+    }
+  }
+
+  async function handleDelete(id: number) {
+    try {
+      setActionLoadingId(id);
+      setTranscriptionError(null);
+      await deleteTranscript(id);
+      if (editingId === id) {
+        cancelEditing();
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unexpected error";
+      setTranscriptionError(message);
+    } finally {
+      setActionLoadingId(null);
+    }
   }
 
   async function handleLogout() {
@@ -296,12 +384,52 @@ export default function App() {
           <p className="muted">No records found.</p>
         ) : null}
         <ul className="history-list">
-          {transcriptions.map((entry) => (
-            <li key={entry.id} className="history-item">
-              <p className="muted">{formatDateTime(entry.created_at)}</p>
-              <p>{entry.transcript}</p>
-            </li>
-          ))}
+          {transcriptions.map((entry) => {
+            const isEditing = editingId === entry.id;
+            const busy = actionLoadingId === entry.id;
+            return (
+              <li key={entry.id} className="history-item">
+                <p className="muted">{formatDateTime(entry.created_at)}</p>
+                {isEditing ? (
+                  <textarea
+                    className="transcript-editor"
+                    value={editingText}
+                    onChange={(event) => setEditingText(event.target.value)}
+                    rows={3}
+                  />
+                ) : (
+                  <p>{entry.transcript}</p>
+                )}
+                <div className="history-actions">
+                  {isEditing ? (
+                    <>
+                      <button disabled={busy} onClick={() => saveEditing(entry.id)}>
+                        Save
+                      </button>
+                      <button disabled={busy} onClick={cancelEditing}>
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        disabled={busy || editingId !== null}
+                        onClick={() => startEditing(entry)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        disabled={busy || editingId !== null}
+                        onClick={() => handleDelete(entry.id)}
+                      >
+                        Delete
+                      </button>
+                    </>
+                  )}
+                </div>
+              </li>
+            );
+          })}
         </ul>
       </section>
     </main>
