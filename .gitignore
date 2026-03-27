@@ -40,3 +40,6 @@ backend/db.sqlite3
 # IDE / editor
 .idea/
 .vscode/
+
+# Local planning docs
+PHASE_FLOW_GUIDE.md

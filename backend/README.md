@@ -38,3 +38,16 @@ python manage.py runserver
 - `GET /api/auth/me/`
 - `POST /api/auth/logout/`
 - Allauth routes under `/accounts/`.
+
+## 6) Transcription endpoints (Phase 2)
+
+- `POST /api/transcriptions/` with `multipart/form-data` field `audio`
+- `GET /api/transcriptions/`
+
+Required env vars:
+
+- `OPENAI_API_KEY`
+- Optional: `OPENAI_TRANSCRIPTION_MODEL` (default: `whisper-1`)
+- Optional: `OPENAI_TRANSCRIPTION_LANGUAGE` (e.g. `zh`, `en`)
+- Optional: `OPENAI_TRANSCRIPTION_PROMPT` (hint text for recognition style)
+- Optional: `MAX_AUDIO_UPLOAD_BYTES` (default: `15728640`)

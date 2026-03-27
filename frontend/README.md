@@ -17,4 +17,10 @@ npm run dev
 
 - Unauthenticated view: show "Continue with Google"
 - After OAuth login callback: frontend checks `GET /api/auth/me/`
-- Authenticated view: show user profile and logout button
+- Authenticated view: show user profile, recorder, latest transcript, and history
+
+## Phase 2 flow
+
+- Record audio with browser `MediaRecorder`
+- Upload to `POST /api/transcriptions/`
+- Load history from `GET /api/transcriptions/`

@@ -1,17 +1,20 @@
-# Voiceflow - Phase 1 Implementation
+# Voiceflow - Phase 1 + Phase 2 Implementation
 
-This repository now includes a Phase 1 scaffold based on `design-doc.md`:
+This repo now includes Phase 1 and Phase 2 implementation based on `design-doc.md`:
 
 - `backend/`: Django + DRF + django-allauth + PostgreSQL configuration
-- `frontend/`: React + Vite + TypeScript auth shell
-- Google OAuth login flow wiring and auth status endpoint
+- `frontend/`: React + Vite + TypeScript auth + recorder/transcription UI
+- Google OAuth login flow, session-based auth endpoints, and transcription APIs
 
-## Phase 1 Checklist
+## Checklist
 
 - [x] Django project setup with DRF, PostgreSQL, and django-allauth
 - [x] React app setup (Vite + TypeScript)
 - [x] Google OAuth login/logout flow wiring
 - [x] Basic authenticated home page
+- [x] Audio recording in browser (MediaRecorder)
+- [x] Audio upload + backend transcription endpoint
+- [x] Transcript history list for the signed-in user
 - [ ] Deployment pipeline (left for environment-specific setup)
 
 ## Quick start
@@ -25,4 +28,6 @@ This repository now includes a Phase 1 scaffold based on `design-doc.md`:
 
 - `GET /api/auth/me/`
 - `POST /api/auth/logout/`
+- `POST /api/transcriptions/`
+- `GET /api/transcriptions/`
 - allauth routes: `/accounts/*`
