@@ -192,6 +192,13 @@ def action_collection(request):
     return Response(output.data, status=status.HTTP_201_CREATED)
 
 
+@api_view(["DELETE"])
+def action_detail(request, action_id: int):
+    action = get_object_or_404(Action, id=action_id, user=request.user)
+    action.delete()
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 @api_view(["POST"])
 def add_action_to_calendar(request, action_id: int):
     action = get_object_or_404(Action, id=action_id, user=request.user)

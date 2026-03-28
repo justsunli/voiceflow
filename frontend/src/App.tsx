@@ -53,6 +53,7 @@ export default function App() {
   const [actionSaving, setActionSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [calendarSyncLoadingId, setCalendarSyncLoadingId] = useState<number | null>(null);
+  const [actionDeletingId, setActionDeletingId] = useState<number | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
@@ -294,6 +295,31 @@ export default function App() {
       setActionError(message);
     } finally {
       setCalendarSyncLoadingId(null);
+    }
+  }
+
+  async function deleteAction(actionId: number) {
+    try {
+      setActionDeletingId(actionId);
+      setActionError(null);
+      const csrfToken = getCookie("csrftoken");
+      const response = await fetch(`${API_BASE_URL}/api/actions/${actionId}/`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: csrfToken ? { "X-CSRFToken": csrfToken } : {},
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as { detail?: string };
+        throw new Error(payload.detail || `Action delete failed (${response.status})`);
+      }
+
+      setActions((prev) => prev.filter((action) => action.id !== actionId));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unexpected error";
+      setActionError(message);
+    } finally {
+      setActionDeletingId(null);
     }
   }
 
@@ -598,15 +624,13 @@ export default function App() {
                 </p>
                 {action.calendar_event_id ? (
                   <p className="muted">
-                    event_id: {action.calendar_event_id}
                     {action.calendar_event_link ? (
-                      <>
-                        {" · "}
-                        <a href={action.calendar_event_link} target="_blank" rel="noreferrer">
-                          Open in Google Calendar
-                        </a>
-                      </>
-                    ) : null}
+                      <a href={action.calendar_event_link} target="_blank" rel="noreferrer">
+                        Open in Google Calendar
+                      </a>
+                    ) : (
+                      "Synced to Google Calendar"
+                    )}
                   </p>
                 ) : null}
                 <div className="history-actions">
@@ -622,6 +646,13 @@ export default function App() {
                       Synced
                     </button>
                   )}
+                  <button
+                    className="secondary-btn"
+                    disabled={actionDeletingId === action.id || calendarSyncLoadingId === action.id}
+                    onClick={() => deleteAction(action.id)}
+                  >
+                    {actionDeletingId === action.id ? "Deleting..." : "Delete"}
+                  </button>
                 </div>
               </li>
             ))}

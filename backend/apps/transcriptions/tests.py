@@ -195,6 +195,26 @@ class ActionCalendarSyncApiTests(APITestCase):
         self.assertEqual(self.action.status, Action.STATUS_CONFIRMED)
         self.assertIsNone(self.action.calendar_event_id)
 
+    def test_owner_can_delete_action(self):
+        self.client.force_authenticate(self.user)
+        response = self.client.delete(f"/api/actions/{self.action.id}/")
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Action.objects.filter(id=self.action.id).exists())
+
+    def test_non_owner_cannot_delete_action(self):
+        user_model = get_user_model()
+        other_user = user_model.objects.create_user(
+            username="other_calendar_user",
+            email="other-calendar@example.com",
+            password="pass12345",
+        )
+
+        self.client.force_authenticate(other_user)
+        response = self.client.delete(f"/api/actions/{self.action.id}/")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
 
 class ActionExtractionNormalizationTests(APITestCase):
     @patch("apps.transcriptions.services.requests.post")
