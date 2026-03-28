@@ -47,6 +47,11 @@ python manage.py runserver
 - `DELETE /api/transcriptions/{id}/`
 - `POST /api/actions/`
 - `GET /api/actions/`
+- `POST /api/actions/{id}/add-to-calendar/`
+
+Notes:
+- `POST /api/actions/` accepts optional `timezone` (IANA, e.g. `America/Los_Angeles`).
+- Calendar sync auto-attempts token refresh on Google `401` responses.
 
 Required env vars:
 

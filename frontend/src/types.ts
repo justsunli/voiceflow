@@ -35,5 +35,7 @@ export type ActionRecord = {
   date: string | null;
   time: string | null;
   status: "confirmed" | "synced_to_calendar";
+  calendar_event_id: string | null;
+  calendar_event_link?: string | null;
   created_at: string;
 };

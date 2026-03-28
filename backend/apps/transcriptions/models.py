@@ -45,6 +45,7 @@ class Action(models.Model):
     title = models.CharField(max_length=255)
     date = models.DateField(null=True, blank=True)
     time = models.TimeField(null=True, blank=True)
+    timezone = models.CharField(max_length=64, null=True, blank=True)
     status = models.CharField(max_length=32, choices=STATUS_CHOICES, default=STATUS_CONFIRMED)
     calendar_event_id = models.CharField(max_length=255, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

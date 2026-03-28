@@ -26,10 +26,12 @@ class ActionSerializer(serializers.ModelSerializer):
             "title",
             "date",
             "time",
+            "timezone",
             "status",
+            "calendar_event_id",
             "created_at",
         ]
-        read_only_fields = ["id", "status", "created_at"]
+        read_only_fields = ["id", "status", "calendar_event_id", "created_at"]
 
     def validate_type(self, value: str):
         allowed = {choice[0] for choice in Action.TYPE_CHOICES}

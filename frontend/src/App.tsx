@@ -48,10 +48,11 @@ export default function App() {
   const [editingText, setEditingText] = useState("");
   const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
 
-  const [dismissedSuggestionIds, setDismissedSuggestionIds] = useState<number[]>([]);
+  const [activeSuggestionId, setActiveSuggestionId] = useState<number | null>(null);
   const [actionDraft, setActionDraft] = useState<ActionDraft | null>(null);
   const [actionSaving, setActionSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [calendarSyncLoadingId, setCalendarSyncLoadingId] = useState<number | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
@@ -65,7 +66,7 @@ export default function App() {
   );
 
   const activeSuggestionTranscription = transcriptions.find(
-    (item) => item.action_suggestion && !dismissedSuggestionIds.includes(item.id),
+    (item) => item.id === activeSuggestionId && item.action_suggestion,
   );
 
   function clearRecorderTimers() {
@@ -174,6 +175,12 @@ export default function App() {
 
     const created = (await response.json()) as Transcription;
     setTranscriptions((prev) => [created, ...prev]);
+    if (created.action_suggestion) {
+      setActiveSuggestionId(created.id);
+    } else {
+      setActiveSuggestionId(null);
+      setActionDraft(null);
+    }
   }
 
   async function updateTranscript(id: number, transcript: string) {
@@ -211,8 +218,8 @@ export default function App() {
     }
 
     setTranscriptions((prev) => prev.filter((item) => item.id !== id));
-    setDismissedSuggestionIds((prev) => prev.filter((value) => value !== id));
-    if (actionDraft?.transcriptionId === id) {
+    if (activeSuggestionId === id || actionDraft?.transcriptionId === id) {
+      setActiveSuggestionId(null);
       setActionDraft(null);
     }
   }
@@ -243,6 +250,7 @@ export default function App() {
           title: actionDraft.title,
           date: actionDraft.date || null,
           time: actionDraft.time || null,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         }),
       });
 
@@ -253,7 +261,7 @@ export default function App() {
 
       const created = (await response.json()) as ActionRecord;
       setActions((prev) => [created, ...prev]);
-      setDismissedSuggestionIds((prev) => [...prev, actionDraft.transcriptionId]);
+      setActiveSuggestionId(null);
       setActionDraft(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unexpected error";
@@ -263,11 +271,37 @@ export default function App() {
     }
   }
 
+  async function addActionToCalendar(actionId: number) {
+    try {
+      setCalendarSyncLoadingId(actionId);
+      setActionError(null);
+      const csrfToken = getCookie("csrftoken");
+      const response = await fetch(`${API_BASE_URL}/api/actions/${actionId}/add-to-calendar/`, {
+        method: "POST",
+        credentials: "include",
+        headers: csrfToken ? { "X-CSRFToken": csrfToken } : {},
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as { detail?: string };
+        throw new Error(payload.detail || `Calendar sync failed (${response.status})`);
+      }
+
+      const updated = (await response.json()) as ActionRecord;
+      setActions((prev) => prev.map((action) => (action.id === actionId ? updated : action)));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unexpected error";
+      setActionError(message);
+    } finally {
+      setCalendarSyncLoadingId(null);
+    }
+  }
+
   function dismissActionSuggestion() {
     if (!activeSuggestionTranscription) {
       return;
     }
-    setDismissedSuggestionIds((prev) => [...prev, activeSuggestionTranscription.id]);
+    setActiveSuggestionId(null);
     setActionDraft(null);
     setActionError(null);
   }
@@ -333,7 +367,7 @@ export default function App() {
       setTranscriptions([]);
       setActions([]);
       setActionDraft(null);
-      setDismissedSuggestionIds([]);
+      setActiveSuggestionId(null);
       await fetchMe();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unexpected error";
@@ -449,7 +483,7 @@ export default function App() {
       time: activeSuggestionTranscription.action_suggestion.time || "",
     });
     setActionError(null);
-  }, [activeSuggestionTranscription?.id]);
+  }, [activeSuggestionTranscription?.id, actionDraft?.transcriptionId]);
 
   useEffect(() => {
     return () => {
@@ -548,6 +582,7 @@ export default function App() {
 
       <section className="card">
         <h2>Confirmed Actions</h2>
+        {actionError ? <p className="error">{actionError}</p> : null}
         {actions.length === 0 ? (
           <p className="muted">No actions confirmed yet.</p>
         ) : (
@@ -561,6 +596,33 @@ export default function App() {
                   {action.date || "no date"}
                   {action.time ? ` ${action.time}` : ""} · {formatDateTime(action.created_at)}
                 </p>
+                {action.calendar_event_id ? (
+                  <p className="muted">
+                    event_id: {action.calendar_event_id}
+                    {action.calendar_event_link ? (
+                      <>
+                        {" · "}
+                        <a href={action.calendar_event_link} target="_blank" rel="noreferrer">
+                          Open in Google Calendar
+                        </a>
+                      </>
+                    ) : null}
+                  </p>
+                ) : null}
+                <div className="history-actions">
+                  {action.status === "confirmed" ? (
+                    <button
+                      disabled={calendarSyncLoadingId === action.id}
+                      onClick={() => addActionToCalendar(action.id)}
+                    >
+                      {calendarSyncLoadingId === action.id ? "Syncing..." : "Add to Calendar"}
+                    </button>
+                  ) : (
+                    <button className="secondary-btn" disabled>
+                      Synced
+                    </button>
+                  )}
+                </div>
               </li>
             ))}
           </ul>
