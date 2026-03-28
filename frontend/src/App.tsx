@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ActionSuggestionCard } from "./components/ActionSuggestionCard";
+import { CardActionsMenu } from "./components/CardActionsMenu";
 import { HistoryCard } from "./components/HistoryCard";
 import { LatestTranscriptCard } from "./components/LatestTranscriptCard";
 import { RecorderCard } from "./components/RecorderCard";
@@ -25,10 +26,23 @@ type ActionDraft = {
   time: string;
 };
 
+type CaptureMode = "transcript" | "action";
+
 function getCookie(name: string): string | null {
   const cookies = document.cookie.split(";").map((entry) => entry.trim());
   const cookie = cookies.find((entry) => entry.startsWith(`${name}=`));
   return cookie ? decodeURIComponent(cookie.split("=")[1]) : null;
+}
+
+function getGreeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) {
+    return "Good morning";
+  }
+  if (hour < 18) {
+    return "Good afternoon";
+  }
+  return "Good evening";
 }
 
 export default function App() {
@@ -54,12 +68,15 @@ export default function App() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [calendarSyncLoadingId, setCalendarSyncLoadingId] = useState<number | null>(null);
   const [actionDeletingId, setActionDeletingId] = useState<number | null>(null);
+  const [captureMode, setCaptureMode] = useState<CaptureMode>("transcript");
+  const [openMenuKey, setOpenMenuKey] = useState<string | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
   const timerIntervalRef = useRef<number | null>(null);
   const autoStopTimeoutRef = useRef<number | null>(null);
+  const captureModeRef = useRef<CaptureMode>("transcript");
 
   const googleLoginUrl = useMemo(
     () => `${API_BASE_URL}/accounts/google/login/?process=login`,
@@ -157,10 +174,11 @@ export default function App() {
     }
   }
 
-  async function uploadAudio(blob: Blob) {
+  async function uploadAudio(blob: Blob, mode: CaptureMode) {
     const csrfToken = getCookie("csrftoken");
     const formData = new FormData();
     formData.append("audio", blob, `recording-${Date.now()}.webm`);
+    formData.append("mode", mode);
 
     const response = await fetch(`${API_BASE_URL}/api/transcriptions/`, {
       method: "POST",
@@ -176,11 +194,12 @@ export default function App() {
 
     const created = (await response.json()) as Transcription;
     setTranscriptions((prev) => [created, ...prev]);
-    if (created.action_suggestion) {
+    if (mode === "action" && created.action_suggestion) {
       setActiveSuggestionId(created.id);
     } else {
       setActiveSuggestionId(null);
       setActionDraft(null);
+      setActionError(null);
     }
   }
 
@@ -440,7 +459,7 @@ export default function App() {
 
         try {
           setRecorderState("processing");
-          await uploadAudio(recordedBlob);
+          await uploadAudio(recordedBlob, captureModeRef.current);
         } catch (err) {
           const message = err instanceof Error ? err.message : "Unexpected error";
           setTranscriptionError(message);
@@ -512,6 +531,22 @@ export default function App() {
   }, [activeSuggestionTranscription?.id, actionDraft?.transcriptionId]);
 
   useEffect(() => {
+    if (captureMode === "transcript") {
+      setActiveSuggestionId(null);
+      setActionDraft(null);
+      setActionError(null);
+    }
+  }, [captureMode]);
+
+  useEffect(() => {
+    setOpenMenuKey(null);
+  }, [editingId, actionDeletingId, calendarSyncLoadingId, transcriptions.length, actions.length]);
+
+  useEffect(() => {
+    captureModeRef.current = captureMode;
+  }, [captureMode]);
+
+  useEffect(() => {
     return () => {
       clearRecorderTimers();
       cleanupMediaTracks();
@@ -522,7 +557,7 @@ export default function App() {
   }, []);
 
   if (loading) {
-    return <main className="container">Checking auth status...</main>;
+    return <main className="container auth-shell">Checking auth status...</main>;
   }
 
   if (error) {
@@ -548,117 +583,179 @@ export default function App() {
   }
 
   return (
-    <main className="container">
-      <header className="header-row">
-        <div>
-          <h1>Voiceflow</h1>
-          <p>Welcome, {me.user.name}</p>
-          <p className="muted">{me.user.email}</p>
+    <main className="vf-shell">
+      <header className="vf-topbar">
+        <div className="vf-brand">
+          <span className="vf-brand-wave">~</span>
+          <h1>VoiceFlow</h1>
         </div>
-        <button onClick={handleLogout}>Log out</button>
+        <div className="vf-topbar-actions">
+          <div className="vf-user-meta">
+            <p className="vf-user-name">{me.user.name}</p>
+            <p className="vf-user-email">{me.user.email}</p>
+          </div>
+          <button className="secondary-btn" onClick={handleLogout}>
+            Log out
+          </button>
+        </div>
       </header>
 
-      <RecorderCard
-        recorderState={recorderState}
-        recordingSeconds={recordingSeconds}
-        transcriptionError={transcriptionError}
-        copyNotice={copyNotice}
-        onStartRecording={startRecording}
-        onStopRecording={stopRecording}
-      />
-
-      <LatestTranscriptCard
-        latestTranscription={transcriptions[0]}
-        onCopy={copyToClipboard}
-      />
-
-      {activeSuggestionTranscription?.action_suggestion && actionDraft ? (
-        <ActionSuggestionCard
-          suggestion={activeSuggestionTranscription.action_suggestion}
-          saving={actionSaving}
-          error={actionError}
-          draftType={actionDraft.type}
-          draftTitle={actionDraft.title}
-          draftDate={actionDraft.date}
-          draftTime={actionDraft.time}
-          onChangeType={(value) => setActionDraft((prev) => (prev ? { ...prev, type: value } : prev))}
-          onChangeTitle={(value) =>
-            setActionDraft((prev) => (prev ? { ...prev, title: value } : prev))
-          }
-          onChangeDate={(value) => setActionDraft((prev) => (prev ? { ...prev, date: value } : prev))}
-          onChangeTime={(value) => setActionDraft((prev) => (prev ? { ...prev, time: value } : prev))}
-          onConfirm={confirmActionSuggestion}
-          onDismiss={dismissActionSuggestion}
-        />
-      ) : null}
-
-      <HistoryCard
-        transcriptions={transcriptions}
-        historyLoading={historyLoading}
-        editingId={editingId}
-        editingText={editingText}
-        actionLoadingId={actionLoadingId}
-        onChangeEditingText={setEditingText}
-        onStartEditing={startEditing}
-        onCancelEditing={cancelEditing}
-        onSaveEditing={saveEditing}
-        onDelete={handleDelete}
-        onCopy={copyToClipboard}
-      />
-
-      <section className="card">
-        <h2>Confirmed Actions</h2>
-        {actionError ? <p className="error">{actionError}</p> : null}
-        {actions.length === 0 ? (
-          <p className="muted">No actions confirmed yet.</p>
-        ) : (
-          <ul className="history-list">
-            {actions.map((action) => (
-              <li key={action.id} className="history-item">
-                <p>
-                  <strong>{action.type}</strong> · {action.title}
-                </p>
-                <p className="muted">
-                  {action.date || "no date"}
-                  {action.time ? ` ${action.time}` : ""} · {formatDateTime(action.created_at)}
-                </p>
-                {action.calendar_event_id ? (
-                  <p className="muted">
-                    {action.calendar_event_link ? (
-                      <a href={action.calendar_event_link} target="_blank" rel="noreferrer">
-                        Open in Google Calendar
-                      </a>
-                    ) : (
-                      "Synced to Google Calendar"
-                    )}
-                  </p>
-                ) : null}
-                <div className="history-actions">
-                  {action.status === "confirmed" ? (
-                    <button
-                      disabled={calendarSyncLoadingId === action.id}
-                      onClick={() => addActionToCalendar(action.id)}
-                    >
-                      {calendarSyncLoadingId === action.id ? "Syncing..." : "Add to Calendar"}
-                    </button>
-                  ) : (
-                    <button className="secondary-btn" disabled>
-                      Synced
-                    </button>
-                  )}
-                  <button
-                    className="secondary-btn"
-                    disabled={actionDeletingId === action.id || calendarSyncLoadingId === action.id}
-                    onClick={() => deleteAction(action.id)}
-                  >
-                    {actionDeletingId === action.id ? "Deleting..." : "Delete"}
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
+      <section className="vf-welcome">
+        <h2>{getGreeting()}</h2>
+        <p>Ready to capture your thoughts and turn them into actions?</p>
       </section>
+
+      <section className="vf-content-grid">
+        <div className="vf-main-col">
+          <LatestTranscriptCard
+            latestTranscription={transcriptions[0]}
+            onCopy={copyToClipboard}
+          />
+
+          {captureMode === "action" && activeSuggestionTranscription?.action_suggestion && actionDraft ? (
+            <ActionSuggestionCard
+              suggestion={activeSuggestionTranscription.action_suggestion}
+              saving={actionSaving}
+              error={actionError}
+              draftType={actionDraft.type}
+              draftTitle={actionDraft.title}
+              draftDate={actionDraft.date}
+              draftTime={actionDraft.time}
+              onChangeType={(value) => setActionDraft((prev) => (prev ? { ...prev, type: value } : prev))}
+              onChangeTitle={(value) =>
+                setActionDraft((prev) => (prev ? { ...prev, title: value } : prev))
+              }
+              onChangeDate={(value) => setActionDraft((prev) => (prev ? { ...prev, date: value } : prev))}
+              onChangeTime={(value) => setActionDraft((prev) => (prev ? { ...prev, time: value } : prev))}
+              onConfirm={confirmActionSuggestion}
+              onDismiss={dismissActionSuggestion}
+            />
+          ) : null}
+
+          <HistoryCard
+            transcriptions={transcriptions}
+            historyLoading={historyLoading}
+            editingId={editingId}
+            editingText={editingText}
+            actionLoadingId={actionLoadingId}
+            onChangeEditingText={setEditingText}
+            onStartEditing={startEditing}
+            onCancelEditing={cancelEditing}
+            onSaveEditing={saveEditing}
+            onDelete={handleDelete}
+            onCopy={copyToClipboard}
+            openMenuKey={openMenuKey}
+            onMenuToggle={(key) => setOpenMenuKey((prev) => (prev === key ? null : key))}
+            onMenuClose={() => setOpenMenuKey(null)}
+          />
+        </div>
+
+        <aside className="vf-side-col">
+          <RecorderCard
+            recorderState={recorderState}
+            recordingSeconds={recordingSeconds}
+            transcriptionError={transcriptionError}
+            copyNotice={copyNotice}
+            onStartRecording={startRecording}
+            onStopRecording={stopRecording}
+          />
+
+          <section className="card">
+            <h2>Confirmed Actions</h2>
+            {actionError ? <p className="error">{actionError}</p> : null}
+            {actions.length === 0 ? (
+              <p className="muted">No actions confirmed yet.</p>
+            ) : (
+              <ul className="history-list">
+                {actions.map((action) => (
+                  <li key={action.id} className="history-item">
+                    <div className="history-item-head">
+                      <p>
+                        <strong>{action.type}</strong> · {action.title}
+                      </p>
+                      <CardActionsMenu
+                        open={openMenuKey === `action-${action.id}`}
+                        triggerLabel="Open actions menu"
+                        onToggle={() =>
+                          setOpenMenuKey((prev) => (prev === `action-${action.id}` ? null : `action-${action.id}`))
+                        }
+                        onClose={() => setOpenMenuKey(null)}
+                        actions={[
+                          ...(action.status === "confirmed"
+                            ? [
+                                {
+                                  key: "add-calendar",
+                                  label: calendarSyncLoadingId === action.id ? "Syncing..." : "Add to Calendar",
+                                  disabled: calendarSyncLoadingId === action.id,
+                                  onSelect: () => addActionToCalendar(action.id),
+                                },
+                              ]
+                            : []),
+                          ...(action.calendar_event_link
+                            ? [
+                                {
+                                  key: "open-calendar",
+                                  label: "Open in Google Calendar",
+                                  href: action.calendar_event_link,
+                                },
+                              ]
+                            : []),
+                          {
+                            key: "delete",
+                            label: actionDeletingId === action.id ? "Deleting..." : "Delete",
+                            danger: true,
+                            disabled: actionDeletingId === action.id || calendarSyncLoadingId === action.id,
+                            onSelect: () => deleteAction(action.id),
+                          },
+                        ]}
+                      />
+                    </div>
+                    <p className="muted">
+                      {action.date || "no date"}
+                      {action.time ? ` ${action.time}` : ""} · {formatDateTime(action.created_at)}
+                    </p>
+                    {action.calendar_event_id ? (
+                      <p className="muted">
+                        {action.calendar_event_link ? (
+                          <a href={action.calendar_event_link} target="_blank" rel="noreferrer">
+                            Open in Google Calendar
+                          </a>
+                        ) : (
+                          "Synced to Google Calendar"
+                        )}
+                      </p>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </aside>
+      </section>
+
+      <div className="vf-dock">
+        <div className="vf-mode-pill">
+          <button
+            className={captureMode === "transcript" ? "active" : ""}
+            onClick={() => setCaptureMode("transcript")}
+          >
+            Transcript
+          </button>
+          <button
+            className={captureMode === "action" ? "active" : ""}
+            onClick={() => setCaptureMode("action")}
+          >
+            Action
+          </button>
+        </div>
+        <button
+          className="vf-fab"
+          onClick={recorderState === "recording" ? stopRecording : startRecording}
+          disabled={recorderState === "processing"}
+        >
+          {recorderState === "recording" ? "Stop" : "Record"}
+        </button>
+      </div>
     </main>
   );
 }

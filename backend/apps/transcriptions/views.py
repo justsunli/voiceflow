@@ -116,9 +116,17 @@ def transcription_collection(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+    mode = request.data.get("mode", Transcription.MODE_ACTION)
+    if mode not in {Transcription.MODE_TRANSCRIPT, Transcription.MODE_ACTION}:
+        return Response(
+            {"detail": "'mode' must be either 'transcript' or 'action'"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
     transcription = Transcription.objects.create(
         user=request.user,
         audio_file=audio,
+        mode=mode,
         transcript="",
     )
 
@@ -129,10 +137,12 @@ def transcription_collection(request):
         return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 
     transcription.transcript = transcript_text
-    try:
-        suggestion = extract_action_suggestion(transcript_text)
-    except ActionExtractionServiceError:
-        suggestion = None
+    suggestion = None
+    if mode == Transcription.MODE_ACTION:
+        try:
+            suggestion = extract_action_suggestion(transcript_text)
+        except ActionExtractionServiceError:
+            suggestion = None
 
     transcription.raw_action_suggestion = suggestion
     transcription.save(update_fields=["transcript", "raw_action_suggestion"])

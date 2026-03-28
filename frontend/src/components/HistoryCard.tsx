@@ -1,5 +1,6 @@
 import type { Transcription } from "../types";
 import { formatDateTime } from "../utils";
+import { CardActionsMenu } from "./CardActionsMenu";
 
 type HistoryCardProps = {
   transcriptions: Transcription[];
@@ -13,6 +14,9 @@ type HistoryCardProps = {
   onSaveEditing: (id: number) => void;
   onDelete: (id: number) => void;
   onCopy: (text: string) => void;
+  openMenuKey: string | null;
+  onMenuToggle: (menuKey: string) => void;
+  onMenuClose: () => void;
 };
 
 export function HistoryCard({
@@ -27,6 +31,9 @@ export function HistoryCard({
   onSaveEditing,
   onDelete,
   onCopy,
+  openMenuKey,
+  onMenuToggle,
+  onMenuClose,
 }: HistoryCardProps) {
   return (
     <section className="card">
@@ -37,9 +44,59 @@ export function HistoryCard({
         {transcriptions.map((entry) => {
           const isEditing = editingId === entry.id;
           const busy = actionLoadingId === entry.id;
+          const menuKey = `history-${entry.id}`;
+          const menuOpen = openMenuKey === menuKey;
           return (
             <li key={entry.id} className="history-item">
-              <p className="muted">{formatDateTime(entry.created_at)}</p>
+              <div className="history-item-head">
+                <p className="muted">{formatDateTime(entry.created_at)}</p>
+                {!isEditing ? (
+                  <div className="history-item-head-actions">
+                    <button
+                      className="card-icon-btn"
+                      aria-label="Copy transcript"
+                      onClick={() => onCopy(entry.transcript)}
+                    >
+                      <svg
+                        className="card-icon-svg"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                        aria-hidden="true"
+                      >
+                        <rect x="9" y="3" width="12" height="14" rx="2" stroke="currentColor" strokeWidth="2" />
+                        <path
+                          d="M6 7H5C3.89543 7 3 7.89543 3 9V19C3 20.1046 3.89543 21 5 21H15C16.1046 21 17 20.1046 17 19V18"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                    </button>
+                    <CardActionsMenu
+                      open={menuOpen}
+                      triggerLabel="Open actions menu"
+                      onToggle={() => onMenuToggle(menuKey)}
+                      onClose={onMenuClose}
+                      actions={[
+                        {
+                          key: "edit",
+                          label: "Edit",
+                          disabled: busy || editingId !== null,
+                          onSelect: () => onStartEditing(entry),
+                        },
+                        {
+                          key: "delete",
+                          label: "Delete",
+                          danger: true,
+                          disabled: busy || editingId !== null,
+                          onSelect: () => onDelete(entry.id),
+                        },
+                      ]}
+                    />
+                  </div>
+                ) : null}
+              </div>
               {isEditing ? (
                 <textarea
                   className="transcript-editor"
@@ -60,23 +117,7 @@ export function HistoryCard({
                       Cancel
                     </button>
                   </>
-                ) : (
-                  <>
-                    <button className="secondary-btn" onClick={() => onCopy(entry.transcript)}>
-                      Copy
-                    </button>
-                    <button disabled={busy || editingId !== null} onClick={() => onStartEditing(entry)}>
-                      Edit
-                    </button>
-                    <button
-                      className="danger-btn"
-                      disabled={busy || editingId !== null}
-                      onClick={() => onDelete(entry.id)}
-                    >
-                      Delete
-                    </button>
-                  </>
-                )}
+                ) : null}
               </div>
             </li>
           );

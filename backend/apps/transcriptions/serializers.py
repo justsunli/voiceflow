@@ -11,7 +11,7 @@ class TranscriptionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Transcription
-        fields = ["id", "transcript", "created_at", "action_suggestion"]
+        fields = ["id", "mode", "transcript", "created_at", "action_suggestion"]
 
 
 class ActionSerializer(serializers.ModelSerializer):

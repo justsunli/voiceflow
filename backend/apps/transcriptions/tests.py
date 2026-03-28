@@ -4,6 +4,7 @@ from unittest.mock import Mock, patch
 
 from allauth.socialaccount.models import SocialAccount, SocialApp, SocialToken
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -80,6 +81,77 @@ class TranscriptionDetailApiTests(APITestCase):
         response = self.client.delete(f"/api/transcriptions/{self.other_transcription.id}/")
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class TranscriptionCollectionModeTests(APITestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(
+            username="mode_user",
+            email="mode@example.com",
+            password="pass12345",
+        )
+        self.client.force_authenticate(self.user)
+
+    @patch("apps.transcriptions.views.extract_action_suggestion")
+    @patch("apps.transcriptions.views.transcribe_audio")
+    def test_transcript_mode_skips_action_extraction(
+        self,
+        mock_transcribe_audio: Mock,
+        mock_extract_action_suggestion: Mock,
+    ):
+        mock_transcribe_audio.return_value = "plain transcript"
+        audio = SimpleUploadedFile("voice.webm", b"fake-webm-audio", content_type="audio/webm")
+
+        response = self.client.post(
+            "/api/transcriptions/",
+            {"audio": audio, "mode": "transcript"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["mode"], "transcript")
+        self.assertIsNone(response.data["action_suggestion"])
+        mock_extract_action_suggestion.assert_not_called()
+
+    @patch("apps.transcriptions.views.extract_action_suggestion")
+    @patch("apps.transcriptions.views.transcribe_audio")
+    def test_action_mode_runs_action_extraction(
+        self,
+        mock_transcribe_audio: Mock,
+        mock_extract_action_suggestion: Mock,
+    ):
+        mock_transcribe_audio.return_value = "set a reminder for tomorrow at 9am"
+        mock_extract_action_suggestion.return_value = {
+            "type": "reminder",
+            "title": "Reminder",
+            "date": "2026-03-29",
+            "time": "09:00",
+            "confidence": "high",
+        }
+        audio = SimpleUploadedFile("voice.webm", b"fake-webm-audio", content_type="audio/webm")
+
+        response = self.client.post(
+            "/api/transcriptions/",
+            {"audio": audio, "mode": "action"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["mode"], "action")
+        self.assertIsNotNone(response.data["action_suggestion"])
+        mock_extract_action_suggestion.assert_called_once()
+
+    @patch("apps.transcriptions.views.transcribe_audio")
+    def test_invalid_mode_rejected(self, mock_transcribe_audio: Mock):
+        mock_transcribe_audio.return_value = "plain transcript"
+        audio = SimpleUploadedFile("voice.webm", b"fake-webm-audio", content_type="audio/webm")
+
+        response = self.client.post(
+            "/api/transcriptions/",
+            {"audio": audio, "mode": "invalid-mode"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("'mode' must be either 'transcript' or 'action'", response.data["detail"])
 
 
 class ActionCalendarSyncApiTests(APITestCase):
