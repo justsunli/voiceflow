@@ -43,6 +43,10 @@ python manage.py runserver
 
 - `POST /api/transcriptions/` with `multipart/form-data` field `audio`
 - `GET /api/transcriptions/`
+- `PATCH /api/transcriptions/{id}/`
+- `DELETE /api/transcriptions/{id}/`
+- `POST /api/actions/`
+- `GET /api/actions/`
 
 Required env vars:
 
@@ -50,4 +54,5 @@ Required env vars:
 - Optional: `OPENAI_TRANSCRIPTION_MODEL` (default: `whisper-1`)
 - Optional: `OPENAI_TRANSCRIPTION_LANGUAGE` (e.g. `zh`, `en`)
 - Optional: `OPENAI_TRANSCRIPTION_PROMPT` (hint text for recognition style)
+- Optional: `OPENAI_ACTION_MODEL` (default: `gpt-4.1-mini`)
 - Optional: `MAX_AUDIO_UPLOAD_BYTES` (default: `15728640`)

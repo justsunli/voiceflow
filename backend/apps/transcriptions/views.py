@@ -4,9 +4,14 @@ from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from .models import Transcription
-from .serializers import TranscriptionSerializer
-from .services import TranscriptionServiceError, transcribe_audio
+from .models import Action, Transcription
+from .serializers import ActionSerializer, TranscriptionSerializer
+from .services import (
+    ActionExtractionServiceError,
+    TranscriptionServiceError,
+    extract_action_suggestion,
+    transcribe_audio,
+)
 
 
 @api_view(["GET", "POST"])
@@ -43,7 +48,13 @@ def transcription_collection(request):
         return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 
     transcription.transcript = transcript_text
-    transcription.save(update_fields=["transcript"])
+    try:
+        suggestion = extract_action_suggestion(transcript_text)
+    except ActionExtractionServiceError:
+        suggestion = None
+
+    transcription.raw_action_suggestion = suggestion
+    transcription.save(update_fields=["transcript", "raw_action_suggestion"])
 
     serializer = TranscriptionSerializer(transcription)
     return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -75,3 +86,26 @@ def transcription_detail(request, transcription_id: int):
     transcription.save(update_fields=["transcript"])
     serializer = TranscriptionSerializer(transcription)
     return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(["GET", "POST"])
+def action_collection(request):
+    if request.method == "GET":
+        queryset = Action.objects.filter(user=request.user)
+        serializer = ActionSerializer(queryset, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    serializer = ActionSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    transcription_id = serializer.validated_data.pop("transcription_id", None)
+    transcription = None
+    if transcription_id is not None:
+        transcription = get_object_or_404(Transcription, id=transcription_id, user=request.user)
+
+    action = Action.objects.create(
+        user=request.user,
+        transcription=transcription,
+        **serializer.validated_data,
+    )
+    output = ActionSerializer(action)
+    return Response(output.data, status=status.HTTP_201_CREATED)
