@@ -5,6 +5,7 @@ import { HistoryCard } from "./HistoryCard";
 
 const sample = {
   id: 1,
+  mode: "action" as const,
   transcript: "buy milk",
   created_at: "2026-03-27T10:00:00Z",
   action_suggestion: null,
@@ -26,6 +27,9 @@ describe("HistoryCard", () => {
         onSaveEditing={() => undefined}
         onDelete={() => undefined}
         onCopy={() => undefined}
+        openMenuKey={null}
+        onMenuToggle={() => undefined}
+        onMenuClose={() => undefined}
       />,
     );
 
@@ -49,10 +53,13 @@ describe("HistoryCard", () => {
         onSaveEditing={() => undefined}
         onDelete={() => undefined}
         onCopy={() => undefined}
+        openMenuKey="history-1"
+        onMenuToggle={() => undefined}
+        onMenuClose={() => undefined}
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
     expect(onStartEditing).toHaveBeenCalledWith(sample);
   });
 
@@ -73,6 +80,9 @@ describe("HistoryCard", () => {
         onSaveEditing={onSaveEditing}
         onDelete={() => undefined}
         onCopy={() => undefined}
+        openMenuKey={null}
+        onMenuToggle={() => undefined}
+        onMenuClose={() => undefined}
       />,
     );
 

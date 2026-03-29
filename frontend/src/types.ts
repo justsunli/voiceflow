@@ -11,6 +11,7 @@ export type MeResponse = {
 
 export type Transcription = {
   id: number;
+  mode: "transcript" | "action";
   transcript: string;
   created_at: string;
   action_suggestion: ActionSuggestion | null;

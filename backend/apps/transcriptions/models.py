@@ -3,8 +3,16 @@ from django.db import models
 
 
 class Transcription(models.Model):
+    MODE_TRANSCRIPT = "transcript"
+    MODE_ACTION = "action"
+    MODE_CHOICES = [
+        (MODE_TRANSCRIPT, "transcript"),
+        (MODE_ACTION, "action"),
+    ]
+
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="transcriptions")
     audio_file = models.FileField(upload_to="audio/%Y/%m/%d")
+    mode = models.CharField(max_length=20, choices=MODE_CHOICES, default=MODE_ACTION)
     transcript = models.TextField()
     raw_action_suggestion = models.JSONField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

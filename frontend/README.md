@@ -13,6 +13,22 @@ npm run dev
 
 - `VITE_API_BASE_URL`: backend base url, defaults to `http://localhost:8000`
 
+## Production deployment (Vercel)
+
+- Framework preset: `Vite`
+- Root directory: `frontend`
+- Build command: `npm run build`
+- Output directory: `dist`
+
+Required env vars on Vercel:
+
+- `VITE_API_BASE_URL=https://<your-render-backend-domain>`
+
+Notes:
+
+- The app reads API base URL from Vite env at build time.
+- Favicon and static assets are served from `public/` and bundled into `dist/`.
+
 ## Auth flow
 
 - Unauthenticated view: show "Continue with Google"
