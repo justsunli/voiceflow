@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;700;900&amp;family=Manrope:wght@400;500;600;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-tertiary": "#fff6fe",
+              "surface-container-highest": "#dce3e9",
+              "secondary-fixed": "#dde1f9",
+              "surface-tint": "#2256ce",
+              "surface-container": "#e9eef3",
+              "inverse-surface": "#0b0f11",
+              "primary-fixed": "#4e7af3",
+              "secondary": "#595e72",
+              "surface-variant": "#dce3e9",
+              "on-surface-variant": "#596065",
+              "on-primary-fixed-variant": "#fefcff",
+              "tertiary-fixed-dim": "#d2b7e5",
+              "primary-container": "#4e7af3",
+              "surface-container-low": "#f0f4f8",
+              "tertiary": "#6d567e",
+              "secondary-dim": "#4d5266",
+              "on-secondary": "#faf8ff",
+              "tertiary-dim": "#604a72",
+              "secondary-fixed-dim": "#cfd3eb",
+              "on-tertiary-fixed-variant": "#5c466d",
+              "outline": "#747c81",
+              "surface": "#f7f9fc",
+              "error": "#a83836",
+              "surface-dim": "#d4dbe1",
+              "inverse-primary": "#628aff",
+              "on-primary-fixed": "#ffffff",
+              "on-secondary-fixed": "#3a3f51",
+              "primary-dim": "#0949c1",
+              "on-background": "#2c3338",
+              "surface-bright": "#f7f9fc",
+              "on-tertiary-container": "#523d63",
+              "tertiary-fixed": "#e1c4f4",
+              "on-error": "#fff7f6",
+              "primary": "#2256ce",
+              "tertiary-container": "#e1c4f4",
+              "inverse-on-surface": "#9a9da0",
+              "surface-container-high": "#e3e9ee",
+              "surface-container-lowest": "#ffffff",
+              "on-tertiary-fixed": "#3e2a4f",
+              "on-surface": "#2c3338",
+              "error-dim": "#67040d",
+              "background": "#f7f9fc",
+              "on-secondary-container": "#4c5164",
+              "on-error-container": "#6e0a12",
+              "error-container": "#fa746f",
+              "on-primary-container": "#000000",
+              "on-primary": "#faf8ff",
+              "secondary-container": "#dde1f9",
+              "primary-fixed-dim": "#3f6de5",
+              "on-secondary-fixed-variant": "#565b6f",
+              "outline-variant": "#acb3b9"
+            },
+            fontFamily: {
+              "headline": ["Be Vietnam Pro"],
+              "body": ["Manrope"],
+              "label": ["Manrope"]
+            },
+            borderRadius: {"DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            line-height: 1;
+            text-transform: none;
+            letter-spacing: normal;
+            word-wrap: normal;
+            white-space: nowrap;
+            direction: ltr;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(20px);
+        }
+        .shadow-ambient {
+            shadow-color: rgba(44, 51, 56, 0.04);
+            box-shadow: 0 8px 32px rgba(44, 51, 56, 0.04);
+        }
+        .btn-gradient {
+            background: linear-gradient(135deg, #2256ce 0%, #4e7af3 100%);
+        }
+    </style>
+</head>
+<body class="bg-surface font-body text-on-surface min-h-screen flex flex-col">
+<!-- TopAppBar -->
+<header class="bg-[#f7f9fc] dark:bg-[#0f172a] docked full-width top-0 z-50">
+<div class="flex justify-between items-center w-full px-6 py-4 max-w-7xl mx-auto">
+<div class="text-2xl font-black text-[#2B5CD4] dark:text-[#4e7af3] font-['Be_Vietnam_Pro'] tracking-tight">
+                VoiceFlow
+            </div>
+<div class="flex items-center gap-4">
+<button class="material-symbols-outlined text-[#2c3338] dark:text-[#cbd5e1] hover:bg-[#e3e9ee] dark:hover:bg-[#334155] transition-colors duration-200 p-2 rounded-full active:scale-95 transition-transform" data-icon="help_outline">help_outline</button>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-grow flex items-center justify-center px-6 py-12">
+<div class="w-full max-w-lg">
+<!-- Welcome Editorial Section -->
+<div class="text-center mb-12">
+<h1 class="font-headline text-5xl md:text-6xl font-black tracking-tight text-on-surface mb-4">
+                    Welcome back.
+                </h1>
+<p class="font-body text-lg text-on-surface-variant max-w-xs mx-auto">
+                    Your voice, amplified. Sign in to continue your flow.
+                </p>
+</div>
+<!-- Authentication Card -->
+<div class="glass-card bg-surface-container-lowest rounded-xl p-8 md:p-12 shadow-ambient border border-outline-variant/15 flex flex-col gap-8">
+<!-- Brand Visual/Icon -->
+<div class="flex justify-center">
+<div class="w-20 h-20 rounded-full bg-surface-container-low flex items-center justify-center">
+<span class="material-symbols-outlined text-4xl text-primary" data-icon="graphic_eq">graphic_eq</span>
+</div>
+</div>
+<!-- Action Cluster -->
+<div class="space-y-4">
+<!-- Google Sign In -->
+<button class="w-full h-[3.5rem] flex items-center justify-center gap-3 bg-surface-container-low hover:bg-surface-container-high transition-colors duration-300 rounded-full active:scale-95 transition-transform group">
+<img alt="" class="w-6 h-6" data-alt="clean google g logo with multi-color branding on a transparent background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBmjkpUH-Vs8UodncTYcTUPQ18rpss4nzDJeEGdVvhtP0fKxp8_CJ5Afkrx2olh86FMBkYeV3e8J6DGFA8aXqFNG5cd0UAfI3vdgCTy5KwJZXlT7QiHN_feCDPVO9wzoIH62vWAkaYOBBLcY3Po-zV0Me9Jjzq-NuVt2awQMXuSq_ZnPexpwjiYrcaQC20tPlGubzF7Ol7T8jysfB1xESTAN1DUc8OR21xlqr7r-kwg68tlaXI2DK4KehIIxPJt6kPNw7hdhlNXAcM"/>
+<span class="font-label font-bold text-on-surface">Sign in with Google</span>
+</button>
+<div class="relative py-4">
+<div class="absolute inset-0 flex items-center">
+<div class="w-full border-t border-outline-variant/15"></div>
+</div>
+<div class="relative flex justify-center text-sm">
+<span class="px-4 bg-surface-container-lowest text-on-surface-variant font-label">or</span>
+</div>
+</div>
+<!-- Guest Access -->
+<button class="w-full h-[3.5rem] btn-gradient text-on-primary font-label font-bold rounded-full active:scale-95 transition-transform shadow-lg shadow-primary/20 flex items-center justify-center gap-3">
+<span class="material-symbols-outlined" data-icon="person_outline">person_outline</span>
+                        Continue as Guest
+                    </button>
+</div>
+<!-- Secondary Messaging -->
+<p class="text-center text-sm text-on-surface-variant leading-relaxed">
+                    By continuing, you agree to VoiceFlow's 
+                    <a class="text-primary font-bold hover:underline" href="#">Terms of Service</a> 
+                    and 
+                    <a class="text-primary font-bold hover:underline" href="#">Privacy Policy</a>.
+                </p>
+</div>
+<!-- Contextual Illustration/Decorative Element -->
+<div class="mt-12 opacity-50 flex justify-center gap-2">
+<div class="w-2 h-2 rounded-full bg-primary-container"></div>
+<div class="w-8 h-2 rounded-full bg-primary"></div>
+<div class="w-2 h-2 rounded-full bg-primary-container"></div>
+</div>
+</div>
+</main>
+<!-- Footer -->
+<footer class="bg-[#f7f9fc] dark:bg-[#0f172a] border-t border-[#e3e9ee]/15 dark:border-[#334155]/15 w-full py-8 px-6 flex flex-col md:flex-row justify-between items-center gap-4">
+<div class="text-lg font-bold text-[#2B5CD4] font-headline">VoiceFlow</div>
+<div class="flex flex-wrap justify-center gap-6">
+<a class="font-['Manrope'] text-sm text-[#2c3338] dark:text-[#94a3b8] hover:text-[#2B5CD4] dark:hover:text-[#4e7af3] transition-colors opacity-80 hover:opacity-100" href="#">Privacy Policy</a>
+<a class="font-['Manrope'] text-sm text-[#2c3338] dark:text-[#94a3b8] hover:text-[#2B5CD4] dark:hover:text-[#4e7af3] transition-colors opacity-80 hover:opacity-100" href="#">Terms of Service</a>
+<a class="font-['Manrope'] text-sm text-[#2c3338] dark:text-[#94a3b8] hover:text-[#2B5CD4] dark:hover:text-[#4e7af3] transition-colors opacity-80 hover:opacity-100" href="#">Help Center</a>
+<a class="font-['Manrope'] text-sm text-[#2c3338] dark:text-[#94a3b8] hover:text-[#2B5CD4] dark:hover:text-[#4e7af3] transition-colors opacity-80 hover:opacity-100" href="#">Contact Us</a>
+</div>
+<div class="font-['Manrope'] text-sm text-[#2c3338] dark:text-[#94a3b8] opacity-80">© 2024 VoiceFlow. The Human Echo.</div>
+</footer>
+</body></html>

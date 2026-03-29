@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: voiceflow-backend
+    env: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput
+    preDeployCommand: python manage.py migrate
+    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    healthCheckPath: /api/auth/me/
+    envVars:
+      - key: DJANGO_DEBUG
+        value: "0"
+      - key: APP_LOG_LEVEL
+        value: INFO
+      - key: DB_SSL_REQUIRE
+        value: "1"
+      - key: USE_SECURE_COOKIES
+        value: "1"
+      - key: SESSION_COOKIE_SAMESITE
+        value: None
+      - key: CSRF_COOKIE_SAMESITE
+        value: None

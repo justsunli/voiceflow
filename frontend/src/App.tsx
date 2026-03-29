@@ -16,6 +16,7 @@ import type {
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") || "http://localhost:8000";
 const MAX_RECORDING_SECONDS = 300;
+const GUEST_MODE_STORAGE_KEY = "voiceflow_guest_mode";
 
 type ActionDraft = {
   transcriptionId: number;
@@ -126,6 +127,12 @@ export default function App() {
   const [isMobileView, setIsMobileView] = useState(false);
   const [mobileCardTab, setMobileCardTab] = useState<MobileCardTab>("history");
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [guestMode, setGuestMode] = useState<boolean>(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+    return window.localStorage.getItem(GUEST_MODE_STORAGE_KEY) === "1";
+  });
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
@@ -138,6 +145,9 @@ export default function App() {
     () => `${API_BASE_URL}/accounts/google/login/?process=login`,
     [],
   );
+  const isSignedIn = Boolean(me?.authenticated && me.user);
+  const isGuest = !isSignedIn && guestMode;
+  const canUseActionFeatures = isSignedIn;
 
   const activeSuggestionTranscription = transcriptions.find(
     (item) => item.id === activeSuggestionId && item.action_suggestion,
@@ -190,6 +200,20 @@ export default function App() {
       setMe({ authenticated: false, user: null });
     } finally {
       setLoading(false);
+    }
+  }
+
+  function enableGuestMode() {
+    setGuestMode(true);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(GUEST_MODE_STORAGE_KEY, "1");
+    }
+  }
+
+  function disableGuestMode() {
+    setGuestMode(false);
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(GUEST_MODE_STORAGE_KEY);
     }
   }
 
@@ -434,6 +458,14 @@ export default function App() {
       return;
     }
 
+    if (isGuest) {
+      setTranscriptions((prev) =>
+        prev.map((item) => (item.id === id ? { ...item, transcript: nextText } : item)),
+      );
+      cancelEditing();
+      return;
+    }
+
     try {
       setActionLoadingId(id);
       setTranscriptionError(null);
@@ -448,6 +480,14 @@ export default function App() {
   }
 
   async function handleDelete(id: number) {
+    if (isGuest) {
+      setTranscriptions((prev) => prev.filter((item) => item.id !== id));
+      if (editingId === id) {
+        cancelEditing();
+      }
+      return;
+    }
+
     try {
       setActionLoadingId(id);
       setTranscriptionError(null);
@@ -478,6 +518,7 @@ export default function App() {
       setActions([]);
       setActionDraft(null);
       setActiveSuggestionId(null);
+      disableGuestMode();
       await fetchMe();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unexpected error";
@@ -487,7 +528,7 @@ export default function App() {
 
   async function startRecording() {
     setTranscriptionError(null);
-    const recordingMode = captureMode;
+    const recordingMode: CaptureMode = isGuest ? "transcript" : captureMode;
 
     if (!navigator.mediaDevices || typeof MediaRecorder === "undefined") {
       setTranscriptionError("This browser does not support audio recording.");
@@ -570,11 +611,11 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (me?.authenticated) {
+    if (isSignedIn) {
       fetchTranscriptions();
       fetchActions();
     }
-  }, [me?.authenticated]);
+  }, [isSignedIn]);
 
   useEffect(() => {
     if (!activeSuggestionTranscription?.action_suggestion) {
@@ -595,6 +636,18 @@ export default function App() {
     });
     setActionError(null);
   }, [activeSuggestionTranscription?.id, actionDraft?.transcriptionId]);
+
+  useEffect(() => {
+    if (isGuest && captureMode === "action") {
+      setCaptureMode("transcript");
+    }
+  }, [isGuest, captureMode]);
+
+  useEffect(() => {
+    if (isSignedIn) {
+      disableGuestMode();
+    }
+  }, [isSignedIn]);
 
   useEffect(() => {
     if (captureMode === "transcript") {
@@ -670,14 +723,58 @@ export default function App() {
     );
   }
 
-  if (!me?.authenticated || !me.user) {
+  if (!isSignedIn && !isGuest) {
     return (
-      <main className="container">
-        <h1>Voiceflow</h1>
-        <p>Sign in with Google to continue.</p>
-        <a className="button-link" href={googleLoginUrl}>
-          Continue with Google
-        </a>
+      <main className="vf-auth-page">
+        <header className="vf-auth-header">
+          <div className="vf-auth-brand">VoiceFlow</div>
+        </header>
+
+        <section className="vf-auth-main">
+          <div className="vf-auth-hero">
+            <h1>Capture voice notes instantly</h1>
+            <p>Turn speech into notes and sign in to unlock Actions and Calendar.</p>
+          </div>
+
+          <div className="vf-auth-card">
+            <h2>Choose how to continue</h2>
+
+            <a
+              className="vf-auth-btn primary"
+              href={googleLoginUrl}
+              onClick={() => {
+                disableGuestMode();
+              }}
+            >
+              Continue with Google
+            </a>
+
+            <div className="vf-auth-divider" aria-hidden="true">
+              <span>or</span>
+            </div>
+
+            <button
+              className="vf-auth-btn secondary"
+              onClick={() => {
+                enableGuestMode();
+                setTranscriptions([]);
+                setActions([]);
+                setActionDraft(null);
+                setActiveSuggestionId(null);
+                setActionError(null);
+                setTranscriptionError(null);
+              }}
+            >
+              Continue as Guest
+            </button>
+
+            <p className="vf-auth-helper">
+              Guest mode includes Note only. Sign in to unlock Actions and Calendar.
+            </p>
+          </div>
+        </section>
+
+        <footer className="vf-auth-footer">© 2026 VoiceFlow</footer>
       </main>
     );
   }
@@ -685,11 +782,15 @@ export default function App() {
   const confirmedActionsCard = (
     <section className="card">
       <h2>Actions</h2>
-      {actionError ? <p className="error">{actionError}</p> : null}
-      {actions.length === 0 ? (
-        <p className="muted">No actions confirmed yet.</p>
-      ) : (
-        <ul className="history-list">
+          {!canUseActionFeatures ? (
+            <p className="muted">Sign in with Google to use Action mode and calendar features.</p>
+          ) : actionError ? (
+            <p className="error">{actionError}</p>
+          ) : null}
+          {canUseActionFeatures && actions.length === 0 ? (
+            <p className="muted">No actions confirmed yet.</p>
+          ) : canUseActionFeatures ? (
+            <ul className="history-list">
           {actions.map((action) => (
             <li key={action.id} className="history-item">
               <div className="history-item-head">
@@ -748,8 +849,8 @@ export default function App() {
             </li>
           ))}
         </ul>
-      )}
-    </section>
+          ) : null}
+        </section>
   );
 
   return (
@@ -766,21 +867,42 @@ export default function App() {
             aria-expanded={profileMenuOpen}
             onClick={() => setProfileMenuOpen((prev) => !prev)}
           >
-            <span>{(me.user.name || me.user.email).slice(0, 1).toUpperCase()}</span>
+            <span>
+              {isSignedIn ? (me?.user?.name || me?.user?.email || "U").slice(0, 1).toUpperCase() : "G"}
+            </span>
           </button>
           {profileMenuOpen ? (
             <div className="mobile-profile-menu" role="menu">
-              <p className="mobile-profile-name">{me.user.name}</p>
-              <p className="mobile-profile-email">{me.user.email}</p>
-              <button
-                className="mobile-profile-logout"
-                onClick={() => {
-                  setProfileMenuOpen(false);
-                  void handleLogout();
-                }}
-              >
-                Log out
-              </button>
+              {isSignedIn && me?.user ? (
+                <>
+                  <p className="mobile-profile-name">{me.user.name}</p>
+                  <p className="mobile-profile-email">{me.user.email}</p>
+                  <button
+                    className="mobile-profile-logout"
+                    onClick={() => {
+                      setProfileMenuOpen(false);
+                      void handleLogout();
+                    }}
+                  >
+                    Log out
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className="mobile-profile-name">Guest mode</p>
+                  <p className="mobile-profile-email">Sign in to unlock Action mode and calendar sync.</p>
+                  <a
+                    className="button-link mobile-profile-logout"
+                    href={googleLoginUrl}
+                    onClick={() => {
+                      disableGuestMode();
+                      setProfileMenuOpen(false);
+                    }}
+                  >
+                    Continue with Google
+                  </a>
+                </>
+              )}
             </div>
           ) : null}
         </div>
@@ -798,7 +920,7 @@ export default function App() {
             onCopy={copyToClipboard}
           />
 
-          {captureMode === "action" && activeSuggestionTranscription?.action_suggestion && actionDraft ? (
+          {canUseActionFeatures && captureMode === "action" && activeSuggestionTranscription?.action_suggestion && actionDraft ? (
             <ActionSuggestionCard
               suggestion={activeSuggestionTranscription.action_suggestion}
               saving={actionSaving}
@@ -816,7 +938,7 @@ export default function App() {
             />
           ) : null}
 
-          {isMobileView ? (
+          {isMobileView && canUseActionFeatures ? (
             <div className="mobile-card-tabs">
               <button
                 className={mobileCardTab === "history" ? "active" : ""}
@@ -852,7 +974,7 @@ export default function App() {
             />
           ) : null}
 
-          {isMobileView && mobileCardTab === "actions" ? confirmedActionsCard : null}
+          {isMobileView && canUseActionFeatures && mobileCardTab === "actions" ? confirmedActionsCard : null}
         </div>
 
         {!isMobileView ? <aside className="vf-side-col">{confirmedActionsCard}</aside> : null}
@@ -867,8 +989,15 @@ export default function App() {
             Note
           </button>
           <button
-            className={captureMode === "action" ? "active" : ""}
-            onClick={() => setCaptureMode("action")}
+            className={`${captureMode === "action" ? "active" : ""} ${!canUseActionFeatures ? "locked" : ""}`}
+            onClick={() => {
+              if (!canUseActionFeatures) {
+                setTranscriptionError("Sign in with Google to use Action mode and calendar features.");
+                return;
+              }
+              setCaptureMode("action");
+            }}
+            aria-disabled={!canUseActionFeatures}
           >
             Action
           </button>

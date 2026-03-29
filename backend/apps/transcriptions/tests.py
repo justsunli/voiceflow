@@ -5,12 +5,14 @@ from unittest.mock import Mock, patch
 from allauth.socialaccount.models import SocialAccount, SocialApp, SocialToken
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.cache import cache
 from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from .models import Action, Transcription
 from .services import TranscriptionServiceError, extract_action_suggestion
+from apps.core.throttles import TranscriptionPostRateThrottle
 
 
 class TranscriptionDetailApiTests(APITestCase):
@@ -168,6 +170,56 @@ class TranscriptionCollectionModeTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_502_BAD_GATEWAY)
         self.assertEqual(response.data["detail"], "Transcription failed. Please try again later.")
+
+
+class GuestTranscriptionAccessTests(APITestCase):
+    @patch("apps.transcriptions.views.extract_action_suggestion")
+    @patch("apps.transcriptions.views.transcribe_audio")
+    def test_guest_can_transcribe_note_mode(
+        self,
+        mock_transcribe_audio: Mock,
+        mock_extract_action_suggestion: Mock,
+    ):
+        mock_transcribe_audio.return_value = "guest transcript"
+        audio = SimpleUploadedFile("voice.webm", b"guest-webm-audio", content_type="audio/webm")
+
+        response = self.client.post(
+            "/api/transcriptions/",
+            {"audio": audio, "mode": "transcript"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["mode"], "transcript")
+        self.assertEqual(response.data["transcript"], "guest transcript")
+        self.assertIsNone(response.data["action_suggestion"])
+        self.assertFalse(Transcription.objects.exists())
+        mock_extract_action_suggestion.assert_not_called()
+
+    @patch("apps.transcriptions.views.transcribe_audio")
+    def test_guest_cannot_use_action_mode(self, mock_transcribe_audio: Mock):
+        audio = SimpleUploadedFile("voice.webm", b"guest-webm-audio", content_type="audio/webm")
+        response = self.client.post(
+            "/api/transcriptions/",
+            {"audio": audio, "mode": "action"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data["detail"], "Sign in with Google to use Action mode and calendar features.")
+        mock_transcribe_audio.assert_not_called()
+
+    @patch.object(TranscriptionPostRateThrottle, "rate", "1/minute", create=True)
+    @patch("apps.transcriptions.views.transcribe_audio")
+    def test_guest_transcription_still_rate_limited(self, mock_transcribe_audio: Mock):
+        cache.clear()
+        mock_transcribe_audio.return_value = "guest transcript"
+        first_audio = SimpleUploadedFile("voice1.webm", b"guest-webm-audio-1", content_type="audio/webm")
+        second_audio = SimpleUploadedFile("voice2.webm", b"guest-webm-audio-2", content_type="audio/webm")
+
+        first_response = self.client.post("/api/transcriptions/", {"audio": first_audio, "mode": "transcript"})
+        second_response = self.client.post("/api/transcriptions/", {"audio": second_audio, "mode": "transcript"})
+
+        self.assertEqual(first_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(second_response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
 
 
 class ActionCalendarSyncApiTests(APITestCase):
@@ -340,6 +392,21 @@ class ActionCalendarSyncApiTests(APITestCase):
         response = self.client.delete(f"/api/actions/{self.action.id}/")
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_guest_cannot_add_to_calendar(self):
+        response = self.client.post(f"/api/actions/{self.action.id}/add-to-calendar/")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_guest_cannot_create_actions(self):
+        response = self.client.post(
+            "/api/actions/",
+            {
+                "title": "Guest action",
+                "type": "event",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 
 class ActionExtractionNormalizationTests(APITestCase):
