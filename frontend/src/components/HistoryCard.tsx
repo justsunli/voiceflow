@@ -49,7 +49,7 @@ export function HistoryCard({
           return (
             <li key={entry.id} className="history-item">
               <div className="history-item-head">
-                <p className="muted">{formatDateTime(entry.created_at)}</p>
+                <p className="meta-time">{formatDateTime(entry.created_at)}</p>
                 {!isEditing ? (
                   <div className="history-item-head-actions">
                     <button
@@ -97,16 +97,18 @@ export function HistoryCard({
                   </div>
                 ) : null}
               </div>
-              {isEditing ? (
-                <textarea
-                  className="transcript-editor"
-                  value={editingText}
-                  onChange={(event) => onChangeEditingText(event.target.value)}
-                  rows={3}
-                />
-              ) : (
-                <p>{entry.transcript}</p>
-              )}
+              <div className="history-item-body">
+                {isEditing ? (
+                  <textarea
+                    className="transcript-editor"
+                    value={editingText}
+                    onChange={(event) => onChangeEditingText(event.target.value)}
+                    rows={3}
+                  />
+                ) : (
+                  <p>{entry.transcript}</p>
+                )}
+              </div>
               <div className="history-actions">
                 {isEditing ? (
                   <>

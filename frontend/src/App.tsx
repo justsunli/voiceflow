@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ActionSuggestionCard } from "./components/ActionSuggestionCard";
-import { CardActionsMenu } from "./components/CardActionsMenu";
+import { ConfirmDialog } from "./components/ConfirmDialog";
 import { HistoryCard } from "./components/HistoryCard";
 import { LatestTranscriptCard } from "./components/LatestTranscriptCard";
 import { RecorderCard } from "./components/RecorderCard";
@@ -45,6 +45,58 @@ function getGreeting() {
   return "Good evening";
 }
 
+function formatActionWhen(dateValue: string | null, timeValue: string | null) {
+  const normalizedTime = timeValue ? timeValue.slice(0, 5) : null;
+
+  if (!dateValue && !normalizedTime) {
+    return "No scheduled time";
+  }
+
+  if (dateValue) {
+    const [yearRaw, monthRaw, dayRaw] = dateValue.split("-");
+    const year = Number(yearRaw);
+    const month = Number(monthRaw);
+    const day = Number(dayRaw);
+    if (Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day)) {
+      return "No scheduled time";
+    }
+
+    if (normalizedTime) {
+      const [hourRaw, minuteRaw] = normalizedTime.split(":");
+      const hour = Number(hourRaw);
+      const minute = Number(minuteRaw);
+      if (!Number.isNaN(hour) && !Number.isNaN(minute)) {
+        const dt = new Date(year, month - 1, day, hour, minute, 0, 0);
+        return new Intl.DateTimeFormat(undefined, {
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        }).format(dt);
+      }
+    }
+
+    const dt = new Date(year, month - 1, day, 0, 0, 0, 0);
+    return new Intl.DateTimeFormat(undefined, {
+      month: "short",
+      day: "numeric",
+    }).format(dt);
+  }
+
+  const [hourRaw, minuteRaw] = (normalizedTime || "").split(":");
+  const hour = Number(hourRaw);
+  const minute = Number(minuteRaw);
+  if (Number.isNaN(hour) || Number.isNaN(minute)) {
+    return "No scheduled time";
+  }
+  const dt = new Date();
+  dt.setHours(hour, minute, 0, 0);
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(dt);
+}
+
 export default function App() {
   const [loading, setLoading] = useState(true);
   const [me, setMe] = useState<MeResponse | null>(null);
@@ -68,6 +120,7 @@ export default function App() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [calendarSyncLoadingId, setCalendarSyncLoadingId] = useState<number | null>(null);
   const [actionDeletingId, setActionDeletingId] = useState<number | null>(null);
+  const [pendingDeleteActionId, setPendingDeleteActionId] = useState<number | null>(null);
   const [captureMode, setCaptureMode] = useState<CaptureMode>("transcript");
   const [openMenuKey, setOpenMenuKey] = useState<string | null>(null);
 
@@ -76,7 +129,6 @@ export default function App() {
   const streamRef = useRef<MediaStream | null>(null);
   const timerIntervalRef = useRef<number | null>(null);
   const autoStopTimeoutRef = useRef<number | null>(null);
-  const captureModeRef = useRef<CaptureMode>("transcript");
 
   const googleLoginUrl = useMemo(
     () => `${API_BASE_URL}/accounts/google/login/?process=login`,
@@ -342,6 +394,15 @@ export default function App() {
     }
   }
 
+  async function confirmDeleteAction() {
+    if (pendingDeleteActionId === null) {
+      return;
+    }
+    const actionId = pendingDeleteActionId;
+    setPendingDeleteActionId(null);
+    await deleteAction(actionId);
+  }
+
   function dismissActionSuggestion() {
     if (!activeSuggestionTranscription) {
       return;
@@ -422,6 +483,7 @@ export default function App() {
 
   async function startRecording() {
     setTranscriptionError(null);
+    const recordingMode = captureMode;
 
     if (!navigator.mediaDevices || typeof MediaRecorder === "undefined") {
       setTranscriptionError("This browser does not support audio recording.");
@@ -459,7 +521,7 @@ export default function App() {
 
         try {
           setRecorderState("processing");
-          await uploadAudio(recordedBlob, captureModeRef.current);
+          await uploadAudio(recordedBlob, recordingMode);
         } catch (err) {
           const message = err instanceof Error ? err.message : "Unexpected error";
           setTranscriptionError(message);
@@ -541,10 +603,6 @@ export default function App() {
   useEffect(() => {
     setOpenMenuKey(null);
   }, [editingId, actionDeletingId, calendarSyncLoadingId, transcriptions.length, actions.length]);
-
-  useEffect(() => {
-    captureModeRef.current = captureMode;
-  }, [captureMode]);
 
   useEffect(() => {
     return () => {
@@ -673,46 +731,34 @@ export default function App() {
                       <p>
                         <strong>{action.type}</strong> · {action.title}
                       </p>
-                      <CardActionsMenu
-                        open={openMenuKey === `action-${action.id}`}
-                        triggerLabel="Open actions menu"
-                        onToggle={() =>
-                          setOpenMenuKey((prev) => (prev === `action-${action.id}` ? null : `action-${action.id}`))
-                        }
-                        onClose={() => setOpenMenuKey(null)}
-                        actions={[
-                          ...(action.status === "confirmed"
-                            ? [
-                                {
-                                  key: "add-calendar",
-                                  label: calendarSyncLoadingId === action.id ? "Syncing..." : "Add to Calendar",
-                                  disabled: calendarSyncLoadingId === action.id,
-                                  onSelect: () => addActionToCalendar(action.id),
-                                },
-                              ]
-                            : []),
-                          ...(action.calendar_event_link
-                            ? [
-                                {
-                                  key: "open-calendar",
-                                  label: "Open in Google Calendar",
-                                  href: action.calendar_event_link,
-                                },
-                              ]
-                            : []),
-                          {
-                            key: "delete",
-                            label: actionDeletingId === action.id ? "Deleting..." : "Delete",
-                            danger: true,
-                            disabled: actionDeletingId === action.id || calendarSyncLoadingId === action.id,
-                            onSelect: () => deleteAction(action.id),
-                          },
-                        ]}
-                      />
+                      <button
+                        className="card-icon-btn danger"
+                        aria-label="Delete action"
+                        disabled={actionDeletingId === action.id || calendarSyncLoadingId === action.id}
+                        onClick={() => setPendingDeleteActionId(action.id)}
+                      >
+                        <svg
+                          className="card-icon-svg"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          xmlns="http://www.w3.org/2000/svg"
+                          aria-hidden="true"
+                        >
+                          <path d="M4 7H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                          <path
+                            d="M9 3H15M18 7L17.2 19C17.1293 20.0601 16.2486 20.8889 15.1862 20.8889H8.81384C7.75139 20.8889 6.87067 20.0601 6.8 19L6 7"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                          <path d="M10 11V17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                          <path d="M14 11V17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                        </svg>
+                      </button>
                     </div>
-                    <p className="muted">
-                      {action.date || "no date"}
-                      {action.time ? ` ${action.time}` : ""} · {formatDateTime(action.created_at)}
+                    <p className="meta-time">
+                      {formatActionWhen(action.date, action.time)}
                     </p>
                     {action.calendar_event_id ? (
                       <p className="muted">
@@ -725,6 +771,29 @@ export default function App() {
                         )}
                       </p>
                     ) : null}
+                    <div className="history-actions">
+                      {action.status === "confirmed" ? (
+                        <button
+                          disabled={calendarSyncLoadingId === action.id}
+                          onClick={() => addActionToCalendar(action.id)}
+                        >
+                          {calendarSyncLoadingId === action.id ? "Syncing..." : "Add to Calendar"}
+                        </button>
+                      ) : action.calendar_event_link ? (
+                        <a
+                          className="button-link secondary-btn"
+                          href={action.calendar_event_link}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Open in Google Calendar
+                        </a>
+                      ) : (
+                        <button className="secondary-btn" disabled>
+                          Synced
+                        </button>
+                      )}
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -749,13 +818,46 @@ export default function App() {
           </button>
         </div>
         <button
-          className="vf-fab"
+          className={`vf-fab ${recorderState === "recording" ? "is-recording" : ""}`}
+          aria-label={recorderState === "recording" ? "Stop recording" : "Start recording"}
           onClick={recorderState === "recording" ? stopRecording : startRecording}
           disabled={recorderState === "processing"}
         >
-          {recorderState === "recording" ? "Stop" : "Record"}
+          {recorderState === "recording" ? (
+            <svg
+              className="vf-fab-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+            >
+              <rect x="7" y="7" width="10" height="10" rx="2.5" fill="currentColor" />
+            </svg>
+          ) : (
+            <svg
+              className="vf-fab-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+            >
+              <rect x="9" y="3" width="6" height="11" rx="3" stroke="currentColor" strokeWidth="2" />
+              <path d="M7 11C7 13.7614 9.23858 16 12 16C14.7614 16 17 13.7614 17 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              <path d="M12 16V21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              <path d="M9 21H15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          )}
         </button>
       </div>
+
+      <ConfirmDialog
+        open={pendingDeleteActionId !== null}
+        title="Delete this action?"
+        body="This action will be removed from your saved actions."
+        onCancel={() => setPendingDeleteActionId(null)}
+        onConfirm={confirmDeleteAction}
+        confirming={pendingDeleteActionId !== null && actionDeletingId === pendingDeleteActionId}
+      />
     </main>
   );
 }
