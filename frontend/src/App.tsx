@@ -4,8 +4,7 @@ import { ActionSuggestionCard } from "./components/ActionSuggestionCard";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { HistoryCard } from "./components/HistoryCard";
 import { LatestTranscriptCard } from "./components/LatestTranscriptCard";
-import { RecorderCard } from "./components/RecorderCard";
-import { formatDateTime } from "./utils";
+import { formatDateTime, formatDuration } from "./utils";
 import type {
   ActionRecord,
   ActionType,
@@ -27,6 +26,7 @@ type ActionDraft = {
 };
 
 type CaptureMode = "transcript" | "action";
+type MobileCardTab = "history" | "actions";
 
 function getCookie(name: string): string | null {
   const cookies = document.cookie.split(";").map((entry) => entry.trim());
@@ -123,12 +123,16 @@ export default function App() {
   const [pendingDeleteActionId, setPendingDeleteActionId] = useState<number | null>(null);
   const [captureMode, setCaptureMode] = useState<CaptureMode>("transcript");
   const [openMenuKey, setOpenMenuKey] = useState<string | null>(null);
+  const [isMobileView, setIsMobileView] = useState(false);
+  const [mobileCardTab, setMobileCardTab] = useState<MobileCardTab>("history");
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
   const timerIntervalRef = useRef<number | null>(null);
   const autoStopTimeoutRef = useRef<number | null>(null);
+  const profileMenuRef = useRef<HTMLDivElement | null>(null);
 
   const googleLoginUrl = useMemo(
     () => `${API_BASE_URL}/accounts/google/login/?process=login`,
@@ -605,6 +609,50 @@ export default function App() {
   }, [editingId, actionDeletingId, calendarSyncLoadingId, transcriptions.length, actions.length]);
 
   useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia("(max-width: 640px)");
+    const apply = () => setIsMobileView(mediaQuery.matches);
+    apply();
+
+    mediaQuery.addEventListener("change", apply);
+    return () => mediaQuery.removeEventListener("change", apply);
+  }, []);
+
+  useEffect(() => {
+    if (!isMobileView) {
+      setProfileMenuOpen(false);
+    }
+  }, [isMobileView]);
+
+  useEffect(() => {
+    if (!profileMenuOpen) {
+      return;
+    }
+
+    function handleDocumentMouseDown(event: MouseEvent) {
+      if (!profileMenuRef.current?.contains(event.target as Node)) {
+        setProfileMenuOpen(false);
+      }
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setProfileMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleDocumentMouseDown);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleDocumentMouseDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [profileMenuOpen]);
+
+  useEffect(() => {
     return () => {
       clearRecorderTimers();
       cleanupMediaTracks();
@@ -640,6 +688,90 @@ export default function App() {
     );
   }
 
+  const confirmedActionsCard = (
+    <section className="card">
+      <h2>Actions</h2>
+      {actionError ? <p className="error">{actionError}</p> : null}
+      {actions.length === 0 ? (
+        <p className="muted">No actions confirmed yet.</p>
+      ) : (
+        <ul className="history-list">
+          {actions.map((action) => (
+            <li key={action.id} className="history-item">
+              <div className="history-item-head">
+                <p>
+                  <strong>{action.type}</strong> · {action.title}
+                </p>
+                <button
+                  className="card-icon-btn danger"
+                  aria-label="Delete action"
+                  disabled={actionDeletingId === action.id || calendarSyncLoadingId === action.id}
+                  onClick={() => setPendingDeleteActionId(action.id)}
+                >
+                  <svg
+                    className="card-icon-svg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                    aria-hidden="true"
+                  >
+                    <path d="M4 7H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <path
+                      d="M9 3H15M18 7L17.2 19C17.1293 20.0601 16.2486 20.8889 15.1862 20.8889H8.81384C7.75139 20.8889 6.87067 20.0601 6.8 19L6 7"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <path d="M10 11V17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <path d="M14 11V17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                </button>
+              </div>
+              <p className="meta-time">
+                {formatActionWhen(action.date, action.time)}
+              </p>
+              {action.calendar_event_id ? (
+                <p className="muted">
+                  {action.calendar_event_link ? (
+                    <a href={action.calendar_event_link} target="_blank" rel="noreferrer">
+                      Open in Google Calendar
+                    </a>
+                  ) : (
+                    "Synced to Google Calendar"
+                  )}
+                </p>
+              ) : null}
+              <div className="history-actions">
+                {action.status === "confirmed" ? (
+                  <button
+                    disabled={calendarSyncLoadingId === action.id}
+                    onClick={() => addActionToCalendar(action.id)}
+                  >
+                    {calendarSyncLoadingId === action.id ? "Syncing..." : "Add to Calendar"}
+                  </button>
+                ) : action.calendar_event_link ? (
+                  <a
+                    className="button-link secondary-btn"
+                    href={action.calendar_event_link}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open in Google Calendar
+                  </a>
+                ) : (
+                  <button className="secondary-btn" disabled>
+                    Synced
+                  </button>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+
   return (
     <main className="vf-shell">
       <header className="vf-topbar">
@@ -647,20 +779,49 @@ export default function App() {
           <span className="vf-brand-wave">~</span>
           <h1>VoiceFlow</h1>
         </div>
-        <div className="vf-topbar-actions">
-          <div className="vf-user-meta">
-            <p className="vf-user-name">{me.user.name}</p>
-            <p className="vf-user-email">{me.user.email}</p>
+        {isMobileView ? (
+          <div className="mobile-account" ref={profileMenuRef}>
+            <button
+              className="mobile-avatar-btn"
+              aria-label="Open profile menu"
+              aria-haspopup="menu"
+              aria-expanded={profileMenuOpen}
+              onClick={() => setProfileMenuOpen((prev) => !prev)}
+            >
+              <span>{(me.user.name || me.user.email).slice(0, 1).toUpperCase()}</span>
+            </button>
+            {profileMenuOpen ? (
+              <div className="mobile-profile-menu" role="menu">
+                <p className="mobile-profile-name">{me.user.name}</p>
+                <p className="mobile-profile-email">{me.user.email}</p>
+                <button
+                  className="mobile-profile-logout"
+                  onClick={() => {
+                    setProfileMenuOpen(false);
+                    void handleLogout();
+                  }}
+                >
+                  Log out
+                </button>
+              </div>
+            ) : null}
           </div>
-          <button className="secondary-btn" onClick={handleLogout}>
-            Log out
-          </button>
-        </div>
+        ) : (
+          <div className="vf-topbar-actions">
+            <div className="vf-user-meta">
+              <p className="vf-user-name">{me.user.name}</p>
+              <p className="vf-user-email">{me.user.email}</p>
+            </div>
+            <button className="header-logout-btn" onClick={handleLogout}>
+              Log out
+            </button>
+          </div>
+        )}
       </header>
 
       <section className="vf-welcome">
         <h2>{getGreeting()}</h2>
-        <p>Ready to capture your thoughts and turn them into actions?</p>
+        <p>Ready to capture your thoughts?</p>
       </section>
 
       <section className="vf-content-grid">
@@ -690,116 +851,46 @@ export default function App() {
             />
           ) : null}
 
-          <HistoryCard
-            transcriptions={transcriptions}
-            historyLoading={historyLoading}
-            editingId={editingId}
-            editingText={editingText}
-            actionLoadingId={actionLoadingId}
-            onChangeEditingText={setEditingText}
-            onStartEditing={startEditing}
-            onCancelEditing={cancelEditing}
-            onSaveEditing={saveEditing}
-            onDelete={handleDelete}
-            onCopy={copyToClipboard}
-            openMenuKey={openMenuKey}
-            onMenuToggle={(key) => setOpenMenuKey((prev) => (prev === key ? null : key))}
-            onMenuClose={() => setOpenMenuKey(null)}
-          />
+          {isMobileView ? (
+            <div className="mobile-card-tabs">
+              <button
+                className={mobileCardTab === "history" ? "active" : ""}
+                onClick={() => setMobileCardTab("history")}
+              >
+                Recent Activity
+              </button>
+              <button
+                className={mobileCardTab === "actions" ? "active" : ""}
+                onClick={() => setMobileCardTab("actions")}
+              >
+                Actions
+              </button>
+            </div>
+          ) : null}
+
+          {!isMobileView || mobileCardTab === "history" ? (
+            <HistoryCard
+              transcriptions={transcriptions}
+              historyLoading={historyLoading}
+              editingId={editingId}
+              editingText={editingText}
+              actionLoadingId={actionLoadingId}
+              onChangeEditingText={setEditingText}
+              onStartEditing={startEditing}
+              onCancelEditing={cancelEditing}
+              onSaveEditing={saveEditing}
+              onDelete={handleDelete}
+              onCopy={copyToClipboard}
+              openMenuKey={openMenuKey}
+              onMenuToggle={(key) => setOpenMenuKey((prev) => (prev === key ? null : key))}
+              onMenuClose={() => setOpenMenuKey(null)}
+            />
+          ) : null}
+
+          {isMobileView && mobileCardTab === "actions" ? confirmedActionsCard : null}
         </div>
 
-        <aside className="vf-side-col">
-          <RecorderCard
-            recorderState={recorderState}
-            recordingSeconds={recordingSeconds}
-            transcriptionError={transcriptionError}
-            copyNotice={copyNotice}
-            onStartRecording={startRecording}
-            onStopRecording={stopRecording}
-          />
-
-          <section className="card">
-            <h2>Confirmed Actions</h2>
-            {actionError ? <p className="error">{actionError}</p> : null}
-            {actions.length === 0 ? (
-              <p className="muted">No actions confirmed yet.</p>
-            ) : (
-              <ul className="history-list">
-                {actions.map((action) => (
-                  <li key={action.id} className="history-item">
-                    <div className="history-item-head">
-                      <p>
-                        <strong>{action.type}</strong> · {action.title}
-                      </p>
-                      <button
-                        className="card-icon-btn danger"
-                        aria-label="Delete action"
-                        disabled={actionDeletingId === action.id || calendarSyncLoadingId === action.id}
-                        onClick={() => setPendingDeleteActionId(action.id)}
-                      >
-                        <svg
-                          className="card-icon-svg"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                          aria-hidden="true"
-                        >
-                          <path d="M4 7H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                          <path
-                            d="M9 3H15M18 7L17.2 19C17.1293 20.0601 16.2486 20.8889 15.1862 20.8889H8.81384C7.75139 20.8889 6.87067 20.0601 6.8 19L6 7"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                          <path d="M10 11V17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                          <path d="M14 11V17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                        </svg>
-                      </button>
-                    </div>
-                    <p className="meta-time">
-                      {formatActionWhen(action.date, action.time)}
-                    </p>
-                    {action.calendar_event_id ? (
-                      <p className="muted">
-                        {action.calendar_event_link ? (
-                          <a href={action.calendar_event_link} target="_blank" rel="noreferrer">
-                            Open in Google Calendar
-                          </a>
-                        ) : (
-                          "Synced to Google Calendar"
-                        )}
-                      </p>
-                    ) : null}
-                    <div className="history-actions">
-                      {action.status === "confirmed" ? (
-                        <button
-                          disabled={calendarSyncLoadingId === action.id}
-                          onClick={() => addActionToCalendar(action.id)}
-                        >
-                          {calendarSyncLoadingId === action.id ? "Syncing..." : "Add to Calendar"}
-                        </button>
-                      ) : action.calendar_event_link ? (
-                        <a
-                          className="button-link secondary-btn"
-                          href={action.calendar_event_link}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          Open in Google Calendar
-                        </a>
-                      ) : (
-                        <button className="secondary-btn" disabled>
-                          Synced
-                        </button>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        </aside>
+        {!isMobileView ? <aside className="vf-side-col">{confirmedActionsCard}</aside> : null}
       </section>
 
       <div className="vf-dock">
@@ -808,7 +899,7 @@ export default function App() {
             className={captureMode === "transcript" ? "active" : ""}
             onClick={() => setCaptureMode("transcript")}
           >
-            Transcript
+            Note
           </button>
           <button
             className={captureMode === "action" ? "active" : ""}
@@ -848,6 +939,18 @@ export default function App() {
             </svg>
           )}
         </button>
+        <div className="vf-dock-status">
+          {recorderState === "idle" ? <span className="vf-dock-hint">Tap to record</span> : null}
+          {recorderState === "recording" ? (
+            <>
+              <span className="vf-dock-live">Listening...</span>
+              <span className="vf-dock-timer">{formatDuration(recordingSeconds)}</span>
+            </>
+          ) : null}
+          {recorderState === "processing" ? <span className="vf-dock-note">Transcribing audio...</span> : null}
+          {transcriptionError ? <span className="vf-dock-error">{transcriptionError}</span> : null}
+          {copyNotice ? <span className="vf-dock-ok">{copyNotice}</span> : null}
+        </div>
       </div>
 
       <ConfirmDialog

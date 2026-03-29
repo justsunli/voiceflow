@@ -10,7 +10,7 @@ export function LatestTranscriptCard({ latestTranscription, onCopy }: LatestTran
   return (
     <section className="card">
       <div className="title-row">
-        <h2>Latest Transcript</h2>
+        <h2>Latest</h2>
         {latestTranscription ? (
           <button
             className="card-icon-btn"

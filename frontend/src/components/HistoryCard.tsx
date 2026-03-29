@@ -37,7 +37,7 @@ export function HistoryCard({
 }: HistoryCardProps) {
   return (
     <section className="card">
-      <h2>History</h2>
+      <h2>Recent Activity</h2>
       {historyLoading ? <p>Loading history...</p> : null}
       {!historyLoading && transcriptions.length === 0 ? <p className="muted">No records found.</p> : null}
       <ul className="history-list">
