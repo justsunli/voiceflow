@@ -622,12 +622,6 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!isMobileView) {
-      setProfileMenuOpen(false);
-    }
-  }, [isMobileView]);
-
-  useEffect(() => {
     if (!profileMenuOpen) {
       return;
     }
@@ -699,9 +693,7 @@ export default function App() {
           {actions.map((action) => (
             <li key={action.id} className="history-item">
               <div className="history-item-head">
-                <p>
-                  <strong>{action.type}</strong> · {action.title}
-                </p>
+                <p className="action-title">{action.title}</p>
                 <button
                   className="card-icon-btn danger"
                   aria-label="Delete action"
@@ -731,20 +723,10 @@ export default function App() {
               <p className="meta-time">
                 {formatActionWhen(action.date, action.time)}
               </p>
-              {action.calendar_event_id ? (
-                <p className="muted">
-                  {action.calendar_event_link ? (
-                    <a href={action.calendar_event_link} target="_blank" rel="noreferrer">
-                      Open in Google Calendar
-                    </a>
-                  ) : (
-                    "Synced to Google Calendar"
-                  )}
-                </p>
-              ) : null}
               <div className="history-actions">
                 {action.status === "confirmed" ? (
                   <button
+                    className="action-cta-btn"
                     disabled={calendarSyncLoadingId === action.id}
                     onClick={() => addActionToCalendar(action.id)}
                   >
@@ -752,7 +734,7 @@ export default function App() {
                   </button>
                 ) : action.calendar_event_link ? (
                   <a
-                    className="button-link secondary-btn"
+                    className="button-link secondary-btn action-cta-btn"
                     href={action.calendar_event_link}
                     target="_blank"
                     rel="noreferrer"
@@ -760,9 +742,7 @@ export default function App() {
                     Open in Google Calendar
                   </a>
                 ) : (
-                  <button className="secondary-btn" disabled>
-                    Synced
-                  </button>
+                  <span className="synced-status-chip">Synced</span>
                 )}
               </div>
             </li>
@@ -776,47 +756,34 @@ export default function App() {
     <main className="vf-shell">
       <header className="vf-topbar">
         <div className="vf-brand">
-          <span className="vf-brand-wave">~</span>
           <h1>VoiceFlow</h1>
         </div>
-        {isMobileView ? (
-          <div className="mobile-account" ref={profileMenuRef}>
-            <button
-              className="mobile-avatar-btn"
-              aria-label="Open profile menu"
-              aria-haspopup="menu"
-              aria-expanded={profileMenuOpen}
-              onClick={() => setProfileMenuOpen((prev) => !prev)}
-            >
-              <span>{(me.user.name || me.user.email).slice(0, 1).toUpperCase()}</span>
-            </button>
-            {profileMenuOpen ? (
-              <div className="mobile-profile-menu" role="menu">
-                <p className="mobile-profile-name">{me.user.name}</p>
-                <p className="mobile-profile-email">{me.user.email}</p>
-                <button
-                  className="mobile-profile-logout"
-                  onClick={() => {
-                    setProfileMenuOpen(false);
-                    void handleLogout();
-                  }}
-                >
-                  Log out
-                </button>
-              </div>
-            ) : null}
-          </div>
-        ) : (
-          <div className="vf-topbar-actions">
-            <div className="vf-user-meta">
-              <p className="vf-user-name">{me.user.name}</p>
-              <p className="vf-user-email">{me.user.email}</p>
+        <div className="mobile-account" ref={profileMenuRef}>
+          <button
+            className="mobile-avatar-btn"
+            aria-label="Open profile menu"
+            aria-haspopup="menu"
+            aria-expanded={profileMenuOpen}
+            onClick={() => setProfileMenuOpen((prev) => !prev)}
+          >
+            <span>{(me.user.name || me.user.email).slice(0, 1).toUpperCase()}</span>
+          </button>
+          {profileMenuOpen ? (
+            <div className="mobile-profile-menu" role="menu">
+              <p className="mobile-profile-name">{me.user.name}</p>
+              <p className="mobile-profile-email">{me.user.email}</p>
+              <button
+                className="mobile-profile-logout"
+                onClick={() => {
+                  setProfileMenuOpen(false);
+                  void handleLogout();
+                }}
+              >
+                Log out
+              </button>
             </div>
-            <button className="header-logout-btn" onClick={handleLogout}>
-              Log out
-            </button>
-          </div>
-        )}
+          ) : null}
+        </div>
       </header>
 
       <section className="vf-welcome">
@@ -836,11 +803,9 @@ export default function App() {
               suggestion={activeSuggestionTranscription.action_suggestion}
               saving={actionSaving}
               error={actionError}
-              draftType={actionDraft.type}
               draftTitle={actionDraft.title}
               draftDate={actionDraft.date}
               draftTime={actionDraft.time}
-              onChangeType={(value) => setActionDraft((prev) => (prev ? { ...prev, type: value } : prev))}
               onChangeTitle={(value) =>
                 setActionDraft((prev) => (prev ? { ...prev, title: value } : prev))
               }
@@ -940,18 +905,26 @@ export default function App() {
           )}
         </button>
         <div className="vf-dock-status">
-          {recorderState === "idle" ? <span className="vf-dock-hint">Tap to record</span> : null}
-          {recorderState === "recording" ? (
+          {transcriptionError ? (
+            <span className="vf-dock-error">{transcriptionError}</span>
+          ) : (
             <>
-              <span className="vf-dock-live">Listening...</span>
-              <span className="vf-dock-timer">{formatDuration(recordingSeconds)}</span>
+              {recorderState === "idle" ? <span className="vf-dock-hint">Tap to record</span> : null}
+              {recorderState === "recording" ? (
+                <>
+                  <span className="vf-dock-live">Listening...</span>
+                  <span className="vf-dock-timer">{formatDuration(recordingSeconds)}</span>
+                </>
+              ) : null}
+              {recorderState === "processing" ? (
+                <span className="vf-dock-note">Transcribing audio...</span>
+              ) : null}
             </>
-          ) : null}
-          {recorderState === "processing" ? <span className="vf-dock-note">Transcribing audio...</span> : null}
-          {transcriptionError ? <span className="vf-dock-error">{transcriptionError}</span> : null}
-          {copyNotice ? <span className="vf-dock-ok">{copyNotice}</span> : null}
+          )}
         </div>
       </div>
+
+      {copyNotice ? <div className="global-toast success">{copyNotice}</div> : null}
 
       <ConfirmDialog
         open={pendingDeleteActionId !== null}

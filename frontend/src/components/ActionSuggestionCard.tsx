@@ -1,14 +1,12 @@
-import type { ActionSuggestion, ActionType } from "../types";
+import type { ActionSuggestion } from "../types";
 
 type ActionSuggestionCardProps = {
   suggestion: ActionSuggestion;
   saving: boolean;
   error: string | null;
-  draftType: ActionType;
   draftTitle: string;
   draftDate: string;
   draftTime: string;
-  onChangeType: (value: ActionType) => void;
   onChangeTitle: (value: string) => void;
   onChangeDate: (value: string) => void;
   onChangeTime: (value: string) => void;
@@ -20,32 +18,29 @@ export function ActionSuggestionCard({
   suggestion,
   saving,
   error,
-  draftType,
   draftTitle,
   draftDate,
   draftTime,
-  onChangeType,
   onChangeTitle,
   onChangeDate,
   onChangeTime,
   onConfirm,
   onDismiss,
 }: ActionSuggestionCardProps) {
+  const confidence = suggestion.confidence || "unknown";
+
   return (
     <section className="card">
       <h2>Suggested Action</h2>
-      <p className="muted">Confidence: {suggestion.confidence || "unknown"}</p>
+      <p className="muted confidence-row">
+        Confidence: {confidence}
+        <span
+          className={`confidence-dot confidence-${confidence}`}
+          aria-hidden="true"
+        />
+      </p>
 
       <div className="field-grid">
-        <label>
-          Type
-          <select value={draftType} onChange={(e) => onChangeType(e.target.value as ActionType)}>
-            <option value="event">event</option>
-            <option value="reminder">reminder</option>
-            <option value="todo">todo</option>
-          </select>
-        </label>
-
         <label>
           Title
           <input value={draftTitle} onChange={(e) => onChangeTitle(e.target.value)} />

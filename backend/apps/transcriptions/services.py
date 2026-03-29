@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 from datetime import date, timedelta
 from pathlib import Path
@@ -6,6 +7,8 @@ from pathlib import Path
 import requests
 from django.conf import settings
 from django.utils import timezone as django_timezone
+
+logger = logging.getLogger(__name__)
 
 
 class TranscriptionServiceError(Exception):
@@ -108,6 +111,7 @@ def transcribe_audio(audio_path: Path | str, filename: str) -> str:
     audio_file_path = Path(audio_path)
 
     if not api_key:
+        logger.error("Transcription failed: OPENAI_API_KEY is not configured")
         raise TranscriptionServiceError("OPENAI_API_KEY is not configured")
 
     request_data = {"model": model}
@@ -116,16 +120,25 @@ def transcribe_audio(audio_path: Path | str, filename: str) -> str:
     if prompt:
         request_data["prompt"] = prompt
 
-    with audio_file_path.open("rb") as audio_stream:
-        response = requests.post(
-            "https://api.openai.com/v1/audio/transcriptions",
-            headers={"Authorization": f"Bearer {api_key}"},
-            data=request_data,
-            files={"file": (filename, audio_stream, "application/octet-stream")},
-            timeout=120,
-        )
+    try:
+        with audio_file_path.open("rb") as audio_stream:
+            response = requests.post(
+                "https://api.openai.com/v1/audio/transcriptions",
+                headers={"Authorization": f"Bearer {api_key}"},
+                data=request_data,
+                files={"file": (filename, audio_stream, "application/octet-stream")},
+                timeout=120,
+            )
+    except requests.RequestException as exc:
+        logger.exception("Transcription request transport error")
+        raise TranscriptionServiceError(f"Transcription request failed: {exc}") from exc
 
     if response.status_code >= 400:
+        logger.error(
+            "OpenAI transcription request failed with status %s and body: %s",
+            response.status_code,
+            response.text,
+        )
         raise TranscriptionServiceError(
             f"OpenAI transcription request failed ({response.status_code}): {response.text}"
         )
@@ -133,6 +146,7 @@ def transcribe_audio(audio_path: Path | str, filename: str) -> str:
     payload = response.json()
     transcript = payload.get("text", "").strip()
     if not transcript:
+        logger.error("Transcription provider returned empty transcript text")
         raise TranscriptionServiceError("No transcript text returned by transcription provider")
 
     return transcript
@@ -172,26 +186,29 @@ def extract_action_suggestion(transcript: str) -> dict | None:
         "Use ISO date (YYYY-MM-DD) and 24h time (HH:MM)."
     )
 
-    response = requests.post(
-        "https://api.openai.com/v1/chat/completions",
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        json={
-            "model": model,
-            "messages": [
-                {"role": "system", "content": prompt},
-                {"role": "user", "content": transcript},
-            ],
-            "response_format": {
-                "type": "json_schema",
-                "json_schema": schema,
+    try:
+        response = requests.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
             },
-            "temperature": 0,
-        },
-        timeout=60,
-    )
+            json={
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": transcript},
+                ],
+                "response_format": {
+                    "type": "json_schema",
+                    "json_schema": schema,
+                },
+                "temperature": 0,
+            },
+            timeout=60,
+        )
+    except requests.RequestException as exc:
+        raise ActionExtractionServiceError(f"Action extraction request failed: {exc}") from exc
 
     if response.status_code >= 400:
         raise ActionExtractionServiceError(

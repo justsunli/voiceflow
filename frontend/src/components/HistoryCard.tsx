@@ -106,7 +106,7 @@ export function HistoryCard({
                     rows={3}
                   />
                 ) : (
-                  <p>{entry.transcript}</p>
+                  <p className="card-body-text">{entry.transcript}</p>
                 )}
               </div>
               <div className="history-actions">

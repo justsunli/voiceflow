@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import logging
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import requests
@@ -7,8 +8,11 @@ from django.conf import settings
 from django.shortcuts import get_object_or_404
 from django.utils import timezone as django_timezone
 from rest_framework import status
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+
+from apps.core.throttles import CalendarSyncPostRateThrottle, TranscriptionPostRateThrottle
 
 from .models import Action, Transcription
 from .serializers import ActionSerializer, TranscriptionSerializer
@@ -18,6 +22,25 @@ from .services import (
     extract_action_suggestion,
     transcribe_audio,
 )
+
+logger = logging.getLogger(__name__)
+TRANSCRIPTION_FAILURE_MESSAGE = "Transcription failed. Please try again later."
+CALENDAR_SYNC_FAILURE_MESSAGE = "Calendar sync failed. Please try again later."
+
+
+def _is_truthy(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return False
+
+
+def _client_ip(request) -> str:
+    forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR", "")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    return request.META.get("REMOTE_ADDR", "")
 
 
 def _refresh_google_access_token(social_account: SocialAccount, social_token: SocialToken) -> str | None:
@@ -96,6 +119,8 @@ def _build_calendar_event_payload(action: Action, timezone_name: str) -> dict:
 
 
 @api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+@throttle_classes([TranscriptionPostRateThrottle])
 def transcription_collection(request):
     if request.method == "GET":
         queryset = Transcription.objects.filter(user=request.user)
@@ -105,6 +130,8 @@ def transcription_collection(request):
     audio = request.FILES.get("audio")
     if not audio:
         return Response({"detail": "'audio' file is required"}, status=status.HTTP_400_BAD_REQUEST)
+    if audio.size <= 0:
+        return Response({"detail": "Uploaded audio is empty"}, status=status.HTTP_400_BAD_REQUEST)
 
     if audio.size > settings.MAX_AUDIO_UPLOAD_BYTES:
         return Response(
@@ -116,12 +143,28 @@ def transcription_collection(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+    content_type = (audio.content_type or "").strip().lower()
+    if content_type and content_type not in {item.lower() for item in settings.ALLOWED_AUDIO_CONTENT_TYPES}:
+        return Response(
+            {"detail": "Unsupported audio format"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
     mode = request.data.get("mode", Transcription.MODE_ACTION)
     if mode not in {Transcription.MODE_TRANSCRIPT, Transcription.MODE_ACTION}:
         return Response(
             {"detail": "'mode' must be either 'transcript' or 'action'"},
             status=status.HTTP_400_BAD_REQUEST,
         )
+
+    logger.info(
+        "Transcription request accepted: user_id=%s ip=%s mode=%s bytes=%s content_type=%s",
+        request.user.id,
+        _client_ip(request),
+        mode,
+        audio.size,
+        content_type or "unknown",
+    )
 
     transcription = Transcription.objects.create(
         user=request.user,
@@ -132,9 +175,13 @@ def transcription_collection(request):
 
     try:
         transcript_text = transcribe_audio(transcription.audio_file.path, audio.name)
-    except TranscriptionServiceError as exc:
+    except TranscriptionServiceError:
+        logger.exception("Transcription failed for user_id=%s", request.user.id)
         transcription.delete()
-        return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+        return Response(
+            {"detail": TRANSCRIPTION_FAILURE_MESSAGE},
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
 
     transcription.transcript = transcript_text
     suggestion = None
@@ -142,6 +189,10 @@ def transcription_collection(request):
         try:
             suggestion = extract_action_suggestion(transcript_text)
         except ActionExtractionServiceError:
+            logger.exception("Action extraction failed for transcription_id=%s", transcription.id)
+            suggestion = None
+        except Exception:
+            logger.exception("Unexpected action extraction error for transcription_id=%s", transcription.id)
             suggestion = None
 
     transcription.raw_action_suggestion = suggestion
@@ -210,8 +261,28 @@ def action_detail(request, action_id: int):
 
 
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@throttle_classes([CalendarSyncPostRateThrottle])
 def add_action_to_calendar(request, action_id: int):
     action = get_object_or_404(Action, id=action_id, user=request.user)
+
+    if settings.DEBUG and _is_truthy(request.data.get("force_failure")):
+        logger.warning(
+            "Calendar sync forced failure in DEBUG mode: user_id=%s action_id=%s",
+            request.user.id,
+            action.id,
+        )
+        return Response(
+            {"detail": "Calendar sync failed"},
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
+
+    logger.info(
+        "Calendar sync request accepted: user_id=%s ip=%s action_id=%s",
+        request.user.id,
+        _client_ip(request),
+        action.id,
+    )
 
     social_account = SocialAccount.objects.filter(user=request.user, provider="google").first()
     if not social_account:
@@ -263,22 +334,29 @@ def add_action_to_calendar(request, action_id: int):
         )
 
     if response.status_code >= 400:
-        detail = response.text
-        try:
-            payload = response.json()
-            detail = payload.get("error", {}).get("message") or detail
-        except Exception:
-            pass
+        logger.error(
+            "Calendar sync provider failure: user_id=%s action_id=%s status=%s body=%s",
+            request.user.id,
+            action.id,
+            response.status_code,
+            response.text,
+        )
         return Response(
-            {"detail": f"Calendar sync failed: {detail}"},
+            {"detail": CALENDAR_SYNC_FAILURE_MESSAGE},
             status=status.HTTP_502_BAD_GATEWAY,
         )
 
     payload = response.json()
     event_id = payload.get("id")
     if not event_id:
+        logger.error(
+            "Calendar sync missing event id: user_id=%s action_id=%s payload=%s",
+            request.user.id,
+            action.id,
+            payload,
+        )
         return Response(
-            {"detail": "Calendar sync failed: missing event id in Google response"},
+            {"detail": CALENDAR_SYNC_FAILURE_MESSAGE},
             status=status.HTTP_502_BAD_GATEWAY,
         )
 

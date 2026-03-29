@@ -38,7 +38,7 @@ export function LatestTranscriptCard({ latestTranscription, onCopy }: LatestTran
       {latestTranscription ? (
         <>
           <p className="meta-time">{formatDateTime(latestTranscription.created_at)}</p>
-          <p>{latestTranscription.transcript}</p>
+          <p className="card-body-text">{latestTranscription.transcript}</p>
         </>
       ) : (
         <p className="muted">No transcript yet.</p>

@@ -136,6 +136,10 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
+    "DEFAULT_THROTTLE_RATES": {
+        "transcription_post": os.getenv("TRANSCRIPTION_POST_RATE_LIMIT", "20/hour"),
+        "calendar_sync_post": os.getenv("CALENDAR_SYNC_POST_RATE_LIMIT", "30/hour"),
+    },
 }
 
 CORS_ALLOW_CREDENTIALS = True
@@ -156,3 +160,39 @@ OPENAI_TRANSCRIPTION_LANGUAGE = os.getenv("OPENAI_TRANSCRIPTION_LANGUAGE", "")
 OPENAI_TRANSCRIPTION_PROMPT = os.getenv("OPENAI_TRANSCRIPTION_PROMPT", "")
 OPENAI_ACTION_MODEL = os.getenv("OPENAI_ACTION_MODEL", "gpt-4.1-mini")
 MAX_AUDIO_UPLOAD_BYTES = int(os.getenv("MAX_AUDIO_UPLOAD_BYTES", str(15 * 1024 * 1024)))
+ALLOWED_AUDIO_CONTENT_TYPES = [
+    item.strip()
+    for item in os.getenv(
+        "ALLOWED_AUDIO_CONTENT_TYPES",
+        "audio/webm,audio/mp4,audio/mpeg,audio/wav,audio/x-wav,audio/ogg,audio/flac",
+    ).split(",")
+    if item.strip()
+]
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "standard": {
+            "format": "%(asctime)s %(levelname)s %(name)s %(message)s",
+        }
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "standard",
+        }
+    },
+    "loggers": {
+        "apps.transcriptions": {
+            "handlers": ["console"],
+            "level": os.getenv("APP_LOG_LEVEL", "INFO"),
+            "propagate": False,
+        },
+        "apps.core": {
+            "handlers": ["console"],
+            "level": os.getenv("APP_LOG_LEVEL", "INFO"),
+            "propagate": False,
+        },
+    },
+}

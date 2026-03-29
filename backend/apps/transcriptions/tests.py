@@ -5,11 +5,12 @@ from unittest.mock import Mock, patch
 from allauth.socialaccount.models import SocialAccount, SocialApp, SocialToken
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from .models import Action, Transcription
-from .services import extract_action_suggestion
+from .services import TranscriptionServiceError, extract_action_suggestion
 
 
 class TranscriptionDetailApiTests(APITestCase):
@@ -153,6 +154,21 @@ class TranscriptionCollectionModeTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("'mode' must be either 'transcript' or 'action'", response.data["detail"])
 
+    @patch("apps.transcriptions.views.transcribe_audio")
+    def test_transcription_error_is_sanitized_for_client(self, mock_transcribe_audio: Mock):
+        mock_transcribe_audio.side_effect = TranscriptionServiceError(
+            "OpenAI transcription request failed (401): {'error':'invalid_api_key','key':'sk-...'}"
+        )
+        audio = SimpleUploadedFile("voice.webm", b"fake-webm-audio", content_type="audio/webm")
+
+        response = self.client.post(
+            "/api/transcriptions/",
+            {"audio": audio, "mode": "action"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_502_BAD_GATEWAY)
+        self.assertEqual(response.data["detail"], "Transcription failed. Please try again later.")
+
 
 class ActionCalendarSyncApiTests(APITestCase):
     def setUp(self):
@@ -203,6 +219,21 @@ class ActionCalendarSyncApiTests(APITestCase):
         response = self.client.post(f"/api/actions/{self.action.id}/add-to-calendar/")
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    @override_settings(DEBUG=True)
+    def test_add_to_calendar_force_failure_for_testing(self):
+        self.client.force_authenticate(self.user)
+        response = self.client.post(
+            f"/api/actions/{self.action.id}/add-to-calendar/",
+            {"force_failure": True},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_502_BAD_GATEWAY)
+        self.assertEqual(response.data["detail"], "Calendar sync failed")
+        self.action.refresh_from_db()
+        self.assertEqual(self.action.status, Action.STATUS_CONFIRMED)
+        self.assertIsNone(self.action.calendar_event_id)
 
     @patch("apps.transcriptions.views.requests.post")
     def test_add_to_calendar_refreshes_token_when_expired(self, mock_post: Mock):
@@ -266,6 +297,29 @@ class ActionCalendarSyncApiTests(APITestCase):
         self.action.refresh_from_db()
         self.assertEqual(self.action.status, Action.STATUS_CONFIRMED)
         self.assertIsNone(self.action.calendar_event_id)
+
+    @patch("apps.transcriptions.views.requests.post")
+    def test_add_to_calendar_provider_error_is_sanitized(self, mock_post: Mock):
+        social_account = SocialAccount.objects.create(
+            user=self.user,
+            provider="google",
+            uid="google-uid-4",
+        )
+        SocialToken.objects.create(account=social_account, token="fake-access-token")
+
+        fake_response = Mock()
+        fake_response.status_code = 403
+        fake_response.text = '{"error":{"message":"accessNotConfigured","api_key":"sk-live-..."}}'
+        fake_response.json.return_value = {
+            "error": {"message": "accessNotConfigured", "api_key": "sk-live-..."}
+        }
+        mock_post.return_value = fake_response
+
+        self.client.force_authenticate(self.user)
+        response = self.client.post(f"/api/actions/{self.action.id}/add-to-calendar/")
+
+        self.assertEqual(response.status_code, status.HTTP_502_BAD_GATEWAY)
+        self.assertEqual(response.data["detail"], "Calendar sync failed. Please try again later.")
 
     def test_owner_can_delete_action(self):
         self.client.force_authenticate(self.user)
