@@ -101,6 +101,7 @@ function formatActionWhen(dateValue: string | null, timeValue: string | null) {
 export default function App() {
   const [loading, setLoading] = useState(true);
   const [me, setMe] = useState<MeResponse | null>(null);
+  const [csrfToken, setCsrfToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const [transcriptions, setTranscriptions] = useState<Transcription[]>([]);
@@ -194,9 +195,11 @@ export default function App() {
       }
       const data = (await response.json()) as MeResponse;
       setMe(data);
+      setCsrfToken(data.csrf_token ?? null);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unexpected error";
       setError(message);
+      setCsrfToken(null);
       setMe({ authenticated: false, user: null });
     } finally {
       setLoading(false);
@@ -255,7 +258,7 @@ export default function App() {
   }
 
   async function uploadAudio(blob: Blob, mode: CaptureMode) {
-    const csrfToken = getCookie("csrftoken");
+    const nextCsrfToken = csrfToken || getCookie("csrftoken");
     const formData = new FormData();
     formData.append("audio", blob, `recording-${Date.now()}.webm`);
     formData.append("mode", mode);
@@ -263,7 +266,7 @@ export default function App() {
     const response = await fetch(`${API_BASE_URL}/api/transcriptions/`, {
       method: "POST",
       credentials: "include",
-      headers: csrfToken ? { "X-CSRFToken": csrfToken } : {},
+      headers: nextCsrfToken ? { "X-CSRFToken": nextCsrfToken } : {},
       body: formData,
     });
 
@@ -284,13 +287,13 @@ export default function App() {
   }
 
   async function updateTranscript(id: number, transcript: string) {
-    const csrfToken = getCookie("csrftoken");
+    const nextCsrfToken = csrfToken || getCookie("csrftoken");
     const response = await fetch(`${API_BASE_URL}/api/transcriptions/${id}/`, {
       method: "PATCH",
       credentials: "include",
       headers: {
         "Content-Type": "application/json",
-        ...(csrfToken ? { "X-CSRFToken": csrfToken } : {}),
+        ...(nextCsrfToken ? { "X-CSRFToken": nextCsrfToken } : {}),
       },
       body: JSON.stringify({ transcript }),
     });
@@ -305,11 +308,11 @@ export default function App() {
   }
 
   async function deleteTranscript(id: number) {
-    const csrfToken = getCookie("csrftoken");
+    const nextCsrfToken = csrfToken || getCookie("csrftoken");
     const response = await fetch(`${API_BASE_URL}/api/transcriptions/${id}/`, {
       method: "DELETE",
       credentials: "include",
-      headers: csrfToken ? { "X-CSRFToken": csrfToken } : {},
+      headers: nextCsrfToken ? { "X-CSRFToken": nextCsrfToken } : {},
     });
 
     if (!response.ok) {
@@ -336,13 +339,13 @@ export default function App() {
     try {
       setActionSaving(true);
       setActionError(null);
-      const csrfToken = getCookie("csrftoken");
+      const nextCsrfToken = csrfToken || getCookie("csrftoken");
       const response = await fetch(`${API_BASE_URL}/api/actions/`, {
         method: "POST",
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
-          ...(csrfToken ? { "X-CSRFToken": csrfToken } : {}),
+          ...(nextCsrfToken ? { "X-CSRFToken": nextCsrfToken } : {}),
         },
         body: JSON.stringify({
           transcription_id: actionDraft.transcriptionId,
@@ -375,11 +378,11 @@ export default function App() {
     try {
       setCalendarSyncLoadingId(actionId);
       setActionError(null);
-      const csrfToken = getCookie("csrftoken");
+      const nextCsrfToken = csrfToken || getCookie("csrftoken");
       const response = await fetch(`${API_BASE_URL}/api/actions/${actionId}/add-to-calendar/`, {
         method: "POST",
         credentials: "include",
-        headers: csrfToken ? { "X-CSRFToken": csrfToken } : {},
+        headers: nextCsrfToken ? { "X-CSRFToken": nextCsrfToken } : {},
       });
 
       if (!response.ok) {
@@ -401,11 +404,11 @@ export default function App() {
     try {
       setActionDeletingId(actionId);
       setActionError(null);
-      const csrfToken = getCookie("csrftoken");
+      const nextCsrfToken = csrfToken || getCookie("csrftoken");
       const response = await fetch(`${API_BASE_URL}/api/actions/${actionId}/`, {
         method: "DELETE",
         credentials: "include",
-        headers: csrfToken ? { "X-CSRFToken": csrfToken } : {},
+        headers: nextCsrfToken ? { "X-CSRFToken": nextCsrfToken } : {},
       });
 
       if (!response.ok) {
@@ -505,11 +508,11 @@ export default function App() {
 
   async function handleLogout() {
     try {
-      const csrfToken = getCookie("csrftoken");
+      const nextCsrfToken = csrfToken || getCookie("csrftoken");
       const response = await fetch(`${API_BASE_URL}/api/auth/logout/`, {
         method: "POST",
         credentials: "include",
-        headers: csrfToken ? { "X-CSRFToken": csrfToken } : {},
+        headers: nextCsrfToken ? { "X-CSRFToken": nextCsrfToken } : {},
       });
       if (!response.ok) {
         throw new Error(`Logout failed (${response.status})`);

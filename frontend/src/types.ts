@@ -7,6 +7,7 @@ export type User = {
 export type MeResponse = {
   authenticated: boolean;
   user: User | null;
+  csrf_token?: string;
 };
 
 export type Transcription = {
