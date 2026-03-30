@@ -322,9 +322,6 @@ If the frontend and backend are deployed on different root domains, such as `*.v
 * Check the Google `SocialApp` binding in Django admin
 * Check session cookie behavior in your browser
 
-
-## Future Improvements
-
 ## Future Improvements
 
 - Use a shared custom domain for frontend and backend to improve mobile auth reliability.
