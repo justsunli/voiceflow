@@ -736,7 +736,7 @@ export default function App() {
         <section className="vf-auth-main">
           <div className="vf-auth-hero">
             <h1>Capture voice notes instantly</h1>
-            <p>Turn speech into notes and sign in to unlock Actions and Calendar.</p>
+            <p>Your voice, amplified.</p>
           </div>
 
           <div className="vf-auth-card">
