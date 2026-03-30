@@ -325,11 +325,13 @@ If the frontend and backend are deployed on different root domains, such as `*.v
 
 ## Future Improvements
 
+## Future Improvements
+
 - Use a shared custom domain for frontend and backend to improve mobile auth reliability.
 - **Real-time streaming transcription**: WebSocket connection with chunked Whisper or Deepgram for live text display while recording.
-- **Async task processing**: Move Whisper/GPT calls to Celery + Redis workers for better reliability and scalability. Return a job ID and poll or push results via WebSocket.
 - **Multiple action extraction**: Detect multiple actions in a single transcript ("meeting at 2 and pick up groceries at 5").
-- **Multi-language support**: Whisper already supports multiple languages; surface a language selector and pass it to the API.
-- **Audio playback**: Let users replay recordings alongside transcripts.
 - **Richer action types**: Emails, Slack messages, task assignments.
+- **Sentiment analysis and note analytics**: Help users track emotional tone, recurring topics, and longer-term personal patterns across their voice notes.
+- **Audio file import**: Support importing existing audio files in common formats such as MP3, so users can transcribe recordings captured outside the app instead of only using live browser recording.
+- **Async task processing**: Move Whisper calls to Celery + Redis workers for better reliability and scalability. Return a job ID and poll or push results via WebSocket.
 - **Observability**: Add Prometheus + Grafana for production monitoring — request latency, transcription duration histograms, extraction success rate, and calendar sync failure rate.
