@@ -4,8 +4,6 @@
 
 Users frequently capture quick thoughts or reminders by speaking, but raw transcription still leaves manual work — the user must read the transcript, identify actionable items, and enter them into the right tool (calendar, to-do list, etc.). This app closes that gap: record audio, transcribe it, and surface structured actions the user can confirm with one click.
 
-The project is scoped for a 1-week take-home internship challenge. The core requirement is a working voice-to-text recorder. The action extraction layer adds practical differentiation without overengineering.
-
 ---
 
 ## 2. Goals and Non-Goals

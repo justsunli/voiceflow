@@ -8,7 +8,7 @@ Voice-to-Text Recorder with Smart Action Extraction
 
 ### Summary
 
-Build a lightweight web application that lets users record audio in the browser, transcribe it into text, and optionally extract actionable items such as reminders, appointments, or to-dos from the transcript. The app is designed to satisfy the take-home assignment requirements while also demonstrating thoughtful product scoping, practical AI integration, and engineering trade-off awareness.
+Build a lightweight web application that lets users record audio in the browser, transcribe it into text, and optionally extract actionable items such as reminders, appointments, or to-dos from the transcript.
 
 ### Why this product
 
@@ -68,7 +68,7 @@ Users often capture quick thoughts or spoken reminders, but raw transcription al
 
 ## 5. Product Principles
 
-* **Core flow first:** The assignment requirements must work end-to-end before extra features are added.
+* **Core flow first:** The assigned requirements must work end-to-end before extra features are added.
 * **Automation with guardrails:** The system should suggest actions, not silently execute them.
 * **Practical AI over buzzwords:** AI should solve a real problem in the flow, not be added for its own sake.
 * **Clarity over complexity:** Trade-offs should favor reliability and explainability in a one-week build.
@@ -115,9 +115,7 @@ Users often capture quick thoughts or spoken reminders, but raw transcription al
 
 * After transcription, the backend can analyze the transcript for possible structured actions.
 * Supported initial action types:
-
   * Calendar event
-  * Reminder / to-do
 * If an action is detected, the app shows a suggested action card.
 * The suggestion should include structured fields where available, such as title, date, time, and action type.
 * The user must confirm before the action is saved or executed.
