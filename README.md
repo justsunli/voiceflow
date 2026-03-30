@@ -1,82 +1,64 @@
 # VoiceFlow
 
-VoiceFlow is a full-stack voice notes app that lets users record audio, transcribe speech, and optionally turn spoken intent into structured actions such as reminders or calendar events. It supports both guest Note mode and signed-in Action mode with Google Calendar sync.
+VoiceFlow is a full-stack voice notes app:
 
-## Live Demo
-
-- Frontend: `https://voiceflow-phi.vercel.app`
-- Backend: `https://voiceflow-oxwz.onrender.com`
-
-## Demo Notes
-
-- Guest mode supports **Note** only.
-- Sign in with Google to unlock **Action** mode and **Google Calendar sync**.
-- Desktop browser is recommended for the most reliable OAuth demo experience.
-
-## Key Features
-
-- Record audio directly in the browser
+- Record audio in the browser
 - Transcribe speech to text
-- Support guest mode for Note-only transcription
-- Support signed-in Action mode with suggested action extraction
-- Confirm actions and sync events to Google Calendar
-- Keep transcript and action history for signed-in users
-- Apply basic abuse protection with rate limiting, input validation, and sanitized provider errors
+- Use **Note** mode (transcript only) or **Action** mode (transcript + suggested action)
+- Confirm actions and sync to Google Calendar
+- Use guest mode for Note-only access
 
 ## Tech Stack
 
-- **Frontend:** React, Vite, TypeScript
-- **Backend:** Django, Django REST Framework, django-allauth
-- **Database:** PostgreSQL
-- **Auth:** Google OAuth with session-based auth
-- **AI:** OpenAI transcription and action extraction
-- **Deployment:** Vercel (frontend), Render (backend), Neon (Postgres)
+- Frontend: React + Vite + TypeScript
+- Backend: Django + Django REST Framework + django-allauth
+- Database: PostgreSQL
+- AI: OpenAI transcription + action extraction
+- Auth: Google OAuth (session-based)
 
 ## Repository Structure
 
-- `frontend/` – React app
-- `backend/` – Django app and API
-- `design-doc.md` – architecture and implementation plan
-- `render.yaml` – Render deployment blueprint
+- `frontend/` React app
+- `backend/` Django app and REST API
+- `design-doc.md` architecture and phase notes
+- `render.yaml` Render deployment blueprint
 
-## Product Modes
+## Features
 
-### Note Mode
-- Available to guest users and signed-in users
-- Records audio and returns plain-text transcription only
+- Google OAuth login/logout
+- Guest mode (Note only)
+- Audio recording with MediaRecorder
+- Mode-controlled pipeline:
+  - Note mode: transcription only
+  - Action mode: transcription plus action extraction
+- Transcript history with copy/edit/delete
+- Confirmed actions with add-to-calendar
+- Demo-safe protections:
+  - Rate limiting on expensive endpoints
+  - Upload validation (size and MIME type)
+  - Sanitized provider error responses
 
-### Action Mode
-- Available to signed-in users only
-- Records audio, transcribes speech, and extracts a suggested action
-- Supports confirming actions and syncing supported events to Google Calendar
-
-## Local Development
-
-To run VoiceFlow locally, start PostgreSQL, run the Django backend, then run the Vite frontend.
+## Run Locally
 
 ### Prerequisites
 
 - Python 3.12
 - Node.js 18+
 - npm
-- Docker
+- Docker (recommended for local Postgres)
 - OpenAI API key
-- Google OAuth credentials
+- Google OAuth client (for sign-in and calendar flow testing)
 
-
-### 1. Start PostgreSQL
-
-From the repo root:
+### 1) Start PostgreSQL
 
 ```bash
 cd backend
 docker compose up -d
-````
+```
 
-This project’s Docker Compose setup exposes PostgreSQL on local port `5433`.
+The included Docker setup exposes Postgres on `localhost:5433`.
 
-
-### 2. Configure and run the backend
+### 2) Start backend
 
 ```bash
 cd backend
@@ -86,10 +68,7 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-
-Edit `backend/.env`.
-
-Minimum local values:
+Update `backend/.env` minimum values:
 
 ```env
 POSTGRES_HOST=127.0.0.1
@@ -98,7 +77,7 @@ POSTGRES_DB=voiceflow
 POSTGRES_USER=voiceflow
 POSTGRES_PASSWORD=voiceflow
 
-OPENAI_API_KEY=<your-openai-key>
+OPENAI_API_KEY=your-openai-key
 
 CORS_ALLOWED_ORIGINS=http://localhost:5173
 CSRF_TRUSTED_ORIGINS=http://localhost:5173
@@ -109,7 +88,7 @@ LOGOUT_REDIRECT_URL=http://localhost:5173/
 GOOGLE_OAUTH_CALLBACK_URL=http://localhost:8000/accounts/google/login/callback/
 ```
 
-Then run:
+Run migrations and server:
 
 ```bash
 python manage.py migrate
@@ -117,14 +96,9 @@ python manage.py createsuperuser
 python manage.py runserver
 ```
 
-Backend runs at:
+Backend URL: `http://localhost:8000`
 
-```text
-http://localhost:8000
-```
-
-
-### 3. Configure and run the frontend
+### 3) Start frontend
 
 ```bash
 cd frontend
@@ -139,140 +113,77 @@ Make sure `frontend/.env` contains:
 VITE_API_BASE_URL=http://localhost:8000
 ```
 
-Frontend runs at:
+Frontend URL: `http://localhost:5173`
 
-```text
-http://localhost:5173
-```
+### 4) Configure Google OAuth (local)
 
+In Google Cloud Console, for your OAuth client:
 
-### 4. Configure Google OAuth for local testing
+- Authorized JavaScript origins:
+  - `http://localhost:8000`
+- Authorized redirect URIs:
+  - `http://localhost:8000/accounts/google/login/callback/`
 
-Google sign-in is handled by the Django backend via `django-allauth`, so the OAuth callback is configured on the backend origin.
+In Django admin (`http://localhost:8000/admin/`):
 
-In Google Cloud Console, for your OAuth client, add:
+1. Configure `Site` with domain `localhost:8000`
+2. Create/update Google `SocialApp`
+3. Attach the app to the `localhost:8000` site
 
-#### Authorized JavaScript origins
-
-* `http://localhost:8000`
-
-#### Authorized redirect URIs
-
-* `http://localhost:8000/accounts/google/login/callback/`
-
-Then in Django admin at:
-
-```text
-http://localhost:8000/admin/
-```
-
-configure:
-
-#### Sites
-
-* domain: `localhost:8000`
-* name: `VoiceFlow`
-
-#### Social applications
-
-* provider: Google
-* client ID: `<your Google client ID>`
-* secret key: `<your Google client secret>`
-* attach the `localhost:8000` site
-
----
-
-### 5. Smoke test locally
+### 5) Local smoke test
 
 1. Open `http://localhost:5173`
-2. Click **Continue as Guest**
-3. Record audio in **Note** mode
-4. Sign in with Google
-5. Record audio in **Action** mode
-6. Confirm a suggested action
-7. Optionally test **Add to Calendar**
+2. Continue as Guest and test Note mode recording
+3. Sign in with Google
+4. Test Action mode and suggestion flow
+5. Confirm action and test add-to-calendar
 
 ## API Overview
 
-### Auth
-
-* `GET /api/auth/me/`
-* `POST /api/auth/logout/`
-* `GET /api/auth/csrf/`
-* allauth routes under `/accounts/*`
-
-### Transcriptions
-
-* `POST /api/transcriptions/`
-* `GET /api/transcriptions/`
-* `PATCH /api/transcriptions/{id}/`
-* `DELETE /api/transcriptions/{id}/`
-
-### Actions
-
-* `POST /api/actions/`
-* `GET /api/actions/`
-* `DELETE /api/actions/{id}/`
-* `POST /api/actions/{id}/add-to-calendar/`
+- Auth:
+  - `GET /api/auth/me/`
+  - `POST /api/auth/logout/`
+  - allauth routes under `/accounts/`
+- Transcriptions:
+  - `POST /api/transcriptions/`
+  - `GET /api/transcriptions/`
+  - `PATCH /api/transcriptions/{id}/`
+  - `DELETE /api/transcriptions/{id}/`
+- Actions:
+  - `POST /api/actions/`
+  - `GET /api/actions/`
+  - `DELETE /api/actions/{id}/`
+  - `POST /api/actions/{id}/add-to-calendar/`
 
 ## Deployment
 
-VoiceFlow is deployed with:
+### Backend on Render
 
-* **Neon** for PostgreSQL
-* **Render** for the Django backend
-* **Vercel** for the React frontend
+- Root: `backend`
+- Build:
+  - `pip install -r requirements.txt && python manage.py collectstatic --noinput`
+- Pre-deploy:
+  - `python manage.py migrate`
+- Start:
+  - `gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 120`
 
-### Recommended deploy order
-
-1. Create a Neon Postgres database and copy `DATABASE_URL`
-2. Deploy the backend on Render
-3. Configure Google OAuth redirect URI to the backend callback
-4. Deploy the frontend on Vercel
-5. Verify auth, transcription, actions, and calendar sync
-
----
-
-## Backend Deployment (Render)
-
-### Render settings
-
-* Root directory: `backend`
-* Build command:
-
-```bash
-pip install -r requirements.txt && python manage.py collectstatic --noinput
-```
-
-* Pre-deploy command:
-
-```bash
-python manage.py migrate
-```
-
-* Start command:
-
-```bash
-gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 120
-```
-
-### Required backend environment variables
+Required backend env vars:
 
 ```env
-DJANGO_SECRET_KEY=<strong-random-secret>
+DJANGO_SECRET_KEY=strong-random-secret
 DJANGO_DEBUG=0
-DJANGO_ALLOWED_HOSTS=<render-domain>
-DATABASE_URL=<neon-database-url>
+DJANGO_ALLOWED_HOSTS=your-backend-domain.onrender.com
+DATABASE_URL=your-neon-database-url
 DB_SSL_REQUIRE=1
 
-OPENAI_API_KEY=<server-side-openai-key>
+OPENAI_API_KEY=your-openai-key
 
-CORS_ALLOWED_ORIGINS=https://<vercel-domain>
-CSRF_TRUSTED_ORIGINS=https://<vercel-domain>,https://<render-domain>
+CORS_ALLOWED_ORIGINS=https://your-frontend-domain.vercel.app
+CSRF_TRUSTED_ORIGINS=https://your-frontend-domain.vercel.app,https://your-backend-domain.onrender.com
 
-LOGIN_REDIRECT_URL=https://<vercel-domain>/
-LOGOUT_REDIRECT_URL=https://<vercel-domain>/
-GOOGLE_OAUTH_CALLBACK_URL=https://<render-domain>/accounts/google/login/callback/
+LOGIN_REDIRECT_URL=https://your-frontend-domain.vercel.app/
+LOGOUT_REDIRECT_URL=https://your-frontend-domain.vercel.app/
+GOOGLE_OAUTH_CALLBACK_URL=https://your-backend-domain.onrender.com/accounts/google/login/callback/
 
 USE_SECURE_COOKIES=1
 SESSION_COOKIE_SAMESITE=None
@@ -285,82 +196,47 @@ ALLOWED_AUDIO_CONTENT_TYPES=audio/webm,audio/mp4,audio/mpeg,audio/wav,audio/x-wa
 APP_LOG_LEVEL=INFO
 ```
 
----
+### Frontend on Vercel
 
-## Frontend Deployment (Vercel)
+- Root: `frontend`
+- Framework preset: `Vite`
+- Build command: `npm run build`
+- Output directory: `dist`
 
-### Vercel settings
-
-* Root directory: `frontend`
-* Framework preset: `Vite`
-* Build command:
-
-```bash
-npm run build
-```
-
-* Output directory:
-
-```text
-dist
-```
-
-### Required frontend environment variables
+Required frontend env var:
 
 ```env
-VITE_API_BASE_URL=https://<render-domain>
+VITE_API_BASE_URL=https://your-backend-domain.onrender.com
 ```
 
-## Security and Abuse Protection
+## Security Notes
 
-The deployed demo includes a minimal abuse-protection layer:
-
-* OpenAI API key is used on the backend only
-* High-cost endpoints are rate-limited
-* Calendar sync endpoints require authentication
-* Upload requests are validated by size and MIME type
-* Provider-facing raw errors are logged on the backend only
-* User-facing errors are sanitized before reaching the UI
-
-## Known Limitation
-
-If the frontend and backend are deployed on different root domains, such as `*.vercel.app` and `*.onrender.com`, some mobile browsers may handle cross-site session cookies more strictly. As a result, desktop OAuth is more reliable in the current hosted preview setup.
-
+- OpenAI key is backend-only.
+- Calendar sync endpoints require authentication.
+- Guest requests remain rate-limited.
+- Raw provider errors are logged server-side; user-facing messages are sanitized.
 
 ## Troubleshooting
 
-### CSRF Failed: CSRF token missing
+### CSRF token missing
 
-* Confirm the frontend calls `GET /api/auth/csrf/`
-* Confirm state-changing requests send `X-CSRFToken`
-* Confirm `credentials: include` is enabled on authenticated requests
-* Confirm `CSRF_TRUSTED_ORIGINS` includes your frontend domain
+- Confirm frontend first calls `GET /api/auth/me/`
+- Confirm state-changing requests include `X-CSRFToken`
+- Confirm requests use `credentials: include`
+- Confirm `CSRF_TRUSTED_ORIGINS` includes frontend origin
 
 ### Google login loops back to sign-in
 
-* Check that the OAuth redirect URI exactly matches the backend callback URL
-* Check Django `Site` configuration
-* Check the Google `SocialApp` binding in Django admin
-* Check session cookie behavior in your browser
+- Verify OAuth redirect URI exact match, including trailing slash
+- Verify Django `Site` and Google `SocialApp` binding
+- Verify cookie settings are correct for your deployment topology
 
 ### redirect_uri_mismatch
 
-Update the OAuth client redirect URI to exactly:
+Set OAuth redirect URI exactly to:
 
-```text
-https://<backend-domain>/accounts/google/login/callback/
-```
+`https://your-backend-domain.onrender.com/accounts/google/login/callback/`
 
-### Auth works on desktop but not mobile
+### Desktop login works but mobile fails
 
-This is commonly caused by stricter mobile browser handling of cross-site cookies when frontend and backend are hosted on different root domains.
-
-## Future Improvements
-
-* Use a shared custom domain for frontend and backend to improve mobile auth reliability
-* Refine guest vs signed-in onboarding
-* Improve mobile session stability
-* Expand action extraction types
-* Add stronger monitoring and quota controls for production usage
-
-
+If frontend and backend are on different root domains (for example `*.vercel.app` and `*.onrender.com`), mobile browsers may block cross-site cookies more aggressively. For better mobile auth reliability, use the same apex domain with subdomains (for example `app.example.com` and `api.example.com`).
