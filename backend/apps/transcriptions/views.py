@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 import logging
 import os
 import tempfile
+import time
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import requests
@@ -205,6 +206,7 @@ def transcription_collection(request):
         audio.size,
         content_type or "unknown",
     )
+    request_started_at = time.perf_counter()
 
     try:
         if request.user.is_authenticated:
@@ -218,7 +220,14 @@ def transcription_collection(request):
         else:
             transcript_text = _transcribe_uploaded_audio(audio)
     except TranscriptionServiceError:
+        elapsed_ms = int((time.perf_counter() - request_started_at) * 1000)
         logger.exception("Transcription failed for user_id=%s", request.user.id)
+        logger.info(
+            "Transcription request finished: user_id=%s mode=%s status=failed processing_duration_ms=%s",
+            request.user.id,
+            mode,
+            elapsed_ms,
+        )
         if request.user.is_authenticated:
             transcription.delete()
         return Response(
@@ -227,6 +236,12 @@ def transcription_collection(request):
         )
 
     if not request.user.is_authenticated:
+        elapsed_ms = int((time.perf_counter() - request_started_at) * 1000)
+        logger.info(
+            "Guest transcription request finished: mode=%s status=success processing_duration_ms=%s",
+            mode,
+            elapsed_ms,
+        )
         return Response(_build_guest_transcription_payload(transcript_text), status=status.HTTP_201_CREATED)
 
     transcription.transcript = transcript_text
@@ -242,7 +257,15 @@ def transcription_collection(request):
             suggestion = None
 
     transcription.raw_action_suggestion = suggestion
-    transcription.save(update_fields=["transcript", "raw_action_suggestion"])
+    transcription.processing_duration_ms = int((time.perf_counter() - request_started_at) * 1000)
+    transcription.save(update_fields=["transcript", "raw_action_suggestion", "processing_duration_ms"])
+    logger.info(
+        "Transcription request finished: user_id=%s transcription_id=%s mode=%s status=success processing_duration_ms=%s",
+        request.user.id,
+        transcription.id,
+        mode,
+        transcription.processing_duration_ms,
+    )
 
     serializer = TranscriptionSerializer(transcription)
     return Response(serializer.data, status=status.HTTP_201_CREATED)

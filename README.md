@@ -38,6 +38,7 @@ VoiceFlow is a full-stack voice notes app:
   - Upload validation (size and MIME type)
   - Sanitized provider error responses
 
+
 ## Run Locally
 
 ### Prerequisites
@@ -305,6 +306,10 @@ The deployed demo includes a minimal abuse-protection layer:
 
 If the frontend and backend are deployed on different root domains, such as `*.vercel.app` and `*.onrender.com`, some mobile browsers may handle cross-site session cookies more strictly. As a result, desktop OAuth is more reliable in the current hosted preview setup.
 
+## Demo Auth Scope
+
+* Google sign-in is enabled for approved test users in the current demo environment.  
+* I used Google OAuth in testing mode due to verification timeline constraints.
 
 ## Troubleshooting
 
@@ -324,11 +329,11 @@ If the frontend and backend are deployed on different root domains, such as `*.v
 
 ## Future Improvements
 
-- Use a shared custom domain for frontend and backend to improve mobile auth reliability.
+- **Shared custom domain**: for frontend and backend to improve mobile auth reliability.
 - **Real-time streaming transcription**: WebSocket connection with chunked Whisper or Deepgram for live text display while recording.
 - **Multiple action extraction**: Detect multiple actions in a single transcript ("meeting at 2 and pick up groceries at 5").
 - **Richer action types**: Emails, Slack messages, task assignments.
 - **Sentiment analysis and note analytics**: Help users track emotional tone, recurring topics, and longer-term personal patterns across their voice notes.
-- **Audio file import**: Support importing existing audio files in common formats such as MP3, so users can transcribe recordings captured outside the app instead of only using live browser recording.
-- **Async task processing**: Move Whisper calls to Celery + Redis workers for better reliability and scalability. Return a job ID and poll or push results via WebSocket.
-- **Observability**: Add Prometheus + Grafana for production monitoring — request latency, transcription duration histograms, extraction success rate, and calendar sync failure rate.
+- **Audio file import**: Support importing existing audio files in common formats such as MP3, so users can transcribe recordings captured outside the app.
+- **Async task processing**: Move Whisper calls to Celery + Redis workers for better reliability and scalability.
+- **Observability**: Add Prometheus + Grafana for production monitoring.

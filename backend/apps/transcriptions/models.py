@@ -15,6 +15,7 @@ class Transcription(models.Model):
     mode = models.CharField(max_length=20, choices=MODE_CHOICES, default=MODE_ACTION)
     transcript = models.TextField()
     raw_action_suggestion = models.JSONField(null=True, blank=True)
+    processing_duration_ms = models.PositiveIntegerField(null=True, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

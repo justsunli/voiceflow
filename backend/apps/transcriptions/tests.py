@@ -144,6 +144,21 @@ class TranscriptionCollectionModeTests(APITestCase):
         mock_extract_action_suggestion.assert_called_once()
 
     @patch("apps.transcriptions.views.transcribe_audio")
+    def test_authenticated_transcription_saves_processing_duration(self, mock_transcribe_audio: Mock):
+        mock_transcribe_audio.return_value = "timing test transcript"
+        audio = SimpleUploadedFile("voice.webm", b"fake-webm-audio", content_type="audio/webm")
+
+        response = self.client.post(
+            "/api/transcriptions/",
+            {"audio": audio, "mode": "transcript"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        record = Transcription.objects.get(id=response.data["id"])
+        self.assertIsNotNone(record.processing_duration_ms)
+        self.assertGreaterEqual(record.processing_duration_ms, 0)
+
+    @patch("apps.transcriptions.views.transcribe_audio")
     def test_invalid_mode_rejected(self, mock_transcribe_audio: Mock):
         mock_transcribe_audio.return_value = "plain transcript"
         audio = SimpleUploadedFile("voice.webm", b"fake-webm-audio", content_type="audio/webm")
